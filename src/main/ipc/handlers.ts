@@ -20,12 +20,12 @@ import {
   ApiResponse,
   FileProgressData,
   TaskProgressData
-} from '../../common/ipc';
+} from '@/common/ipc';
 
-import { userService } from '../services/user';
-import { fileService } from '../services/file';
-import { systemService } from '../services/system';
-import { taskService } from '../services/task';
+import { userService } from '@/main/services/user';
+import { fileService } from '@/main/services/file';
+import { systemService } from '@/main/services/system';
+import { taskService } from '@/main/services/task';
 
 // Zod 验证 schemas
 const GetUserByIdSchema = z.object({

@@ -1,5 +1,7 @@
 
 
+import path from 'path';
+
 /** @type { import('@storybook/react-vite').StorybookConfig } */
 const config = {
   "stories": [
@@ -16,6 +18,18 @@ const config = {
   "framework": {
     "name": "@storybook/react-vite",
     "options": {}
-  }
+  },
+  async viteFinal(config) {
+    // 添加路径别名支持
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, '../src'),
+      '@/components': path.resolve(__dirname, '../src/components'),
+      '@/common': path.resolve(__dirname, '../src/common'),
+      '@/utils': path.resolve(__dirname, '../src/utils'),
+      '@/main': path.resolve(__dirname, '../src/main'),
+    };
+    return config;
+  },
 };
 export default config;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemInfo } from '../common/ipc';
+import { SystemInfo } from '@/common/ipc';
 
 interface SystemDemoProps {
   onLog: (message: string, type?: 'info' | 'success' | 'error') => void;

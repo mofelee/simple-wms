@@ -14,7 +14,14 @@
     "outDir": "dist",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "lib": ["DOM", "DOM.Iterable", "ES6"]
+    "lib": ["DOM", "DOM.Iterable", "ES6"],
+    "paths": {
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/common/*": ["src/common/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/main/*": ["src/main/*"]
+    }
   },
   "include": [
     "src/**/*"

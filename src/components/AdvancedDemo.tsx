@@ -8,7 +8,7 @@ import {
   IpcCallOptions,
   IpcCache,
   IpcQueue
-} from '../utils/ipcHelper';
+} from '@/utils/ipcHelper';
 
 interface AdvancedDemoProps {
   onLog: (message: string, type?: 'info' | 'success' | 'error') => void;

@@ -1,4 +1,4 @@
-import { ApiResponse } from '../common/ipc';
+import { ApiResponse } from '@/common/ipc';
 
 /**
  * IPC 调用配置选项

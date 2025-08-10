@@ -1,6 +1,6 @@
 import { app, shell, Notification } from 'electron';
 import os from 'os';
-import { SystemInfo, OpenFolderReq, ShowNotificationReq } from '../../common/ipc';
+import { SystemInfo, OpenFolderReq, ShowNotificationReq } from '@/common/ipc';
 
 export const systemService = {
   /**
@@ -27,7 +27,7 @@ export const systemService = {
         throw new Error(`Failed to open folder: ${result}`);
       }
     } catch (error) {
-      throw new Error(`Failed to open folder: ${error.message}`);
+      throw new Error(`Failed to open folder: ${(error as Error).message}`);
     }
   },
 
@@ -44,7 +44,7 @@ export const systemService = {
       
       notification.show();
     } catch (error) {
-      throw new Error(`Failed to show notification: ${error.message}`);
+      throw new Error(`Failed to show notification: ${(error as Error).message}`);
     }
   },
 

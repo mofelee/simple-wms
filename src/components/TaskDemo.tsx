@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Task, TaskProgressData } from '../common/ipc';
+import { Task, TaskProgressData } from '@/common/ipc';
 
 interface TaskDemoProps {
   onLog: (message: string, type?: 'info' | 'success' | 'error') => void;

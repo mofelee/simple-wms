@@ -1,4 +1,4 @@
-import { User, CreateUserReq, UpdateUserReq } from '../../common/ipc';
+import { User, CreateUserReq, UpdateUserReq } from '@/common/ipc';
 
 // 模拟数据存储
 let users: User[] = [

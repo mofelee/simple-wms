@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { app } from 'electron';
-import { ReadFileReq, WriteFileReq, FileProgressData } from '../../common/ipc';
+import { ReadFileReq, WriteFileReq, FileProgressData } from '@/common/ipc';
 
 export const fileService = {
   // 私有属性：标记是否已打印过路径信息

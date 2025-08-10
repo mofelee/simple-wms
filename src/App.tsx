@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import UserDemo from './components/UserDemo';
-import FileDemo from './components/FileDemo';
-import SystemDemo from './components/SystemDemo';
-import TaskDemo from './components/TaskDemo';
-import AdvancedDemo from './components/AdvancedDemo';
-import LogViewer from './components/LogViewer';
+import UserDemo from '@/components/UserDemo';
+import FileDemo from '@/components/FileDemo';
+import SystemDemo from '@/components/SystemDemo';
+import TaskDemo from '@/components/TaskDemo';
+import AdvancedDemo from '@/components/AdvancedDemo';
+import LogViewer from '@/components/LogViewer';
 
 interface LogEntry {
   id: number;

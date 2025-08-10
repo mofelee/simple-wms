@@ -19,7 +19,7 @@ import {
   ApiResponse,
   FileProgressData,
   TaskProgressData
-} from './common/ipc';
+} from '@/common/ipc';
 
 /**
  * 带超时的 invoke 封装

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileProgressData } from '../common/ipc';
+import { FileProgressData } from '@/common/ipc';
 
 interface FileDemoProps {
   onLog: (message: string, type?: 'info' | 'success' | 'error') => void;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, CreateUserReq, UpdateUserReq } from '../common/ipc';
+import { User, CreateUserReq, UpdateUserReq } from '@/common/ipc';
 
 interface UserDemoProps {
   onLog: (message: string, type?: 'info' | 'success' | 'error') => void;

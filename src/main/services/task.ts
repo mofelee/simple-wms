@@ -1,4 +1,4 @@
-import { Task, CreateTaskReq, TaskProgressData } from '../../common/ipc';
+import { Task, CreateTaskReq, TaskProgressData } from '@/common/ipc';
 
 // 模拟任务存储
 const tasks = new Map<string, Task>();

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { registerIpcHandlers, unregisterIpcHandlers } from './main/ipc/handlers';
+import { registerIpcHandlers, unregisterIpcHandlers } from '@/main/ipc/handlers';
 
 // Vite dev server variables
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
