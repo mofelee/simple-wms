@@ -34,6 +34,12 @@ export const IPC = {
     onProgress: 'task:onProgress',
     onComplete: 'task:onComplete',
   },
+  // 窗口管理
+  window: {
+    open: 'window:open',
+    close: 'window:close',
+    focus: 'window:focus',
+  },
 } as const;
 
 // 用户相关类型
@@ -144,6 +150,25 @@ export interface TaskProgressData {
   message?: string;
 }
 
+// 窗口管理类型
+export interface OpenWindowReq {
+  url: string;
+  options?: {
+    width?: number;
+    height?: number;
+    title?: string;
+    modal?: boolean;
+  };
+}
+
+export interface CloseWindowReq {
+  windowId: string;
+}
+
+export interface FocusWindowReq {
+  windowId: string;
+}
+
 // API 响应包装类型
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -175,7 +200,10 @@ export type IpcChannels =
   | typeof IPC.task.getStatus
   | typeof IPC.task.cancel
   | typeof IPC.task.onProgress
-  | typeof IPC.task.onComplete;
+  | typeof IPC.task.onComplete
+  | typeof IPC.window.open
+  | typeof IPC.window.close
+  | typeof IPC.window.focus;
 
 // 工具类型：提取值类型
 export type ExtractChannelValue<T> = T extends Record<string, infer U> ? U : never;

@@ -14,6 +14,9 @@ import {
   CreateTaskReq,
   GetTaskStatusReq,
   CancelTaskReq,
+  OpenWindowReq,
+  CloseWindowReq,
+  FocusWindowReq,
   User,
   SystemInfo,
   Task,
@@ -26,6 +29,7 @@ import { userService } from '@/main/services/user';
 import { fileService } from '@/main/services/file';
 import { systemService } from '@/main/services/system';
 import { taskService } from '@/main/services/task';
+import { windowService } from '@/main/services/window';
 
 // Zod 验证 schemas
 const GetUserByIdSchema = z.object({
@@ -86,6 +90,25 @@ const GetTaskStatusSchema = z.object({
 
 const CancelTaskSchema = z.object({
   id: z.string().min(1, 'Task ID is required'),
+});
+
+// 窗口管理 schemas
+const OpenWindowSchema = z.object({
+  url: z.string().min(1, 'URL is required'),
+  options: z.object({
+    width: z.number().optional(),
+    height: z.number().optional(),
+    title: z.string().optional(),
+    modal: z.boolean().optional(),
+  }).optional(),
+});
+
+const CloseWindowSchema = z.object({
+  windowId: z.string().min(1, 'Window ID is required'),
+});
+
+const FocusWindowSchema = z.object({
+  windowId: z.string().min(1, 'Window ID is required'),
 });
 
 /**
@@ -327,6 +350,28 @@ export function registerIpcHandlers(): void {
         throw new Error('Task not found or cannot be cancelled');
       }
       return { success: true };
+    })
+  );
+
+  // 窗口管理处理器
+  ipcMain.handle(
+    IPC.window.open,
+    safeHandler(OpenWindowSchema, async (req: OpenWindowReq) => {
+      return await windowService.openWindow(req);
+    })
+  );
+
+  ipcMain.handle(
+    IPC.window.close,
+    safeHandler(CloseWindowSchema, async (req: CloseWindowReq) => {
+      return await windowService.closeWindow(req);
+    })
+  );
+
+  ipcMain.handle(
+    IPC.window.focus,
+    safeHandler(FocusWindowSchema, async (req: FocusWindowReq) => {
+      return await windowService.focusWindow(req);
     })
   );
 

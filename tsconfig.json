@@ -20,11 +20,13 @@
       "@/components/*": ["src/components/*"],
       "@/common/*": ["src/common/*"],
       "@/utils/*": ["src/utils/*"],
-      "@/main/*": ["src/main/*"]
+      "@/main/*": ["src/main/*"],
+      "@/routes/*": ["src/routes/*"]
     }
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/routeTree.gen.ts"
   ],
   "exclude": [
     "node_modules"

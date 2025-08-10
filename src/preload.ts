@@ -13,6 +13,9 @@ import {
   CreateTaskReq,
   GetTaskStatusReq,
   CancelTaskReq,
+  OpenWindowReq,
+  CloseWindowReq,
+  FocusWindowReq,
   User,
   SystemInfo,
   Task,
@@ -223,6 +226,30 @@ const api = {
     },
   },
 
+  // 窗口管理 API
+  window: {
+    /**
+     * 打开新窗口
+     */
+    async open(req: OpenWindowReq): Promise<ApiResponse<string>> {
+      return invokeWithTimeout(IPC.window.open, req);
+    },
+
+    /**
+     * 关闭窗口
+     */
+    async close(req: CloseWindowReq): Promise<ApiResponse<boolean>> {
+      return invokeWithTimeout(IPC.window.close, req);
+    },
+
+    /**
+     * 聚焦窗口
+     */
+    async focus(req: FocusWindowReq): Promise<ApiResponse<boolean>> {
+      return invokeWithTimeout(IPC.window.focus, req);
+    },
+  },
+
   // 开发工具
   dev: {
     /**
@@ -237,6 +264,13 @@ const api = {
      */
     reload(): void {
       ipcRenderer.send('dev:reload');
+    },
+
+    /**
+     * 在新窗口中打开页面 (便捷方法)
+     */
+    async openWindow(url: string, options?: { width?: number; height?: number; title?: string; modal?: boolean }): Promise<ApiResponse<string>> {
+      return invokeWithTimeout(IPC.window.open, { url, options });
     },
   },
 } as const;
