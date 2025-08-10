@@ -501,7 +501,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
             {state.isFocused ? "已聚焦" : "点击聚焦"}
           </button>
 
-          {state.isScanning && (
+          {state.isScanning && !scanSuccessState.isVisible && (
             <span className="px-4 py-2 bg-gradient-to-r from-orange-100 to-yellow-100 text-orange-800 rounded-lg text-sm font-medium shadow-sm border border-orange-200 flex items-center gap-2">
               <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
               扫码中...
