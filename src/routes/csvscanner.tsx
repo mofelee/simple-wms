@@ -12,7 +12,7 @@ function RouteComponent() {
         onScan={(result) => console.log("扫码:", result)}
         placeholder=""
         autoFocus={true}
-        showStatus={true}
+        showStatus={false}
       />
     </div>
   );

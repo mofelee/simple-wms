@@ -37,6 +37,9 @@ export interface ScanBoxProps {
   /** 错误回调 */
   onError?: (error: string) => void;
   
+  /** 清空回调（原因：escape/timeout/manual） */
+  onClear?: (reason: 'escape' | 'timeout' | 'manual') => void;
+  
   /** 自定义样式类名 */
   className?: string;
   
@@ -63,6 +66,12 @@ export interface ScanBoxProps {
   
   /** 超时时间（毫秒），用于判断扫码完成 */
   timeout?: number;
+
+  /** 扫码成功提示显示时间（毫秒），默认 3000 */
+  successVisibleMs?: number;
+
+  /** 调试日志开关，默认 false */
+  debug?: boolean;
 }
 
 export interface ScanBoxState {

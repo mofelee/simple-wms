@@ -11,7 +11,6 @@ import {
   timer,
   takeUntil,
   bufferWhen,
-  BehaviorSubject,
   debounceTime,
   withLatestFrom,
 } from "rxjs";
@@ -43,6 +42,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
   onScan,
   onScanning,
   onError,
+  onClear,
   className = "",
   disabled = false,
   placeholder = "点击此区域，然后扫描条码",
@@ -51,6 +51,8 @@ const ScanBox: React.FC<ScanBoxProps> = ({
   minLength,
   maxLength,
   timeout = 2000, // 默认 2s 超时
+  successVisibleMs = 3000,
+  debug = false,
 }) => {
   // 状态管理
   const [state, setState] = useState<ScanBoxState>({
@@ -78,12 +80,6 @@ const ScanBox: React.FC<ScanBoxProps> = ({
   // Refs
   const scanAreaRef = useRef<HTMLDivElement>(null);
   const keyDownSubjectRef = useRef<Subject<KeyInfo>>(new Subject<KeyInfo>());
-  const rawDataBehaviorSubjectRef = useRef<BehaviorSubject<string>>(
-    new BehaviorSubject<string>("")
-  );
-  const displayDataBehaviorSubjectRef = useRef<BehaviorSubject<string>>(
-    new BehaviorSubject<string>("")
-  );
 
   // 处理扫码完成
   const handleScanComplete = useCallback(
@@ -238,8 +234,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
         if (reason.type === "enter") {
           const raw = keysToParseString(keys);
           const display = keysToDisplayString(keys);
-          rawDataBehaviorSubjectRef.current.next(raw);
-          displayDataBehaviorSubjectRef.current.next(display);
+          // 直接使用局部变量传递结果而不是 BehaviorSubject
           setState((prev) => ({
             ...prev,
             displayData: display,
@@ -247,14 +242,10 @@ const ScanBox: React.FC<ScanBoxProps> = ({
             isScanning: false,
             error: null,
           }));
-          handleScanComplete(
-            rawDataBehaviorSubjectRef.current.value,
-            displayDataBehaviorSubjectRef.current.value
-          );
+          handleScanComplete(raw, display);
         } else {
           // 超时：清空并恢复初始状态
-          rawDataBehaviorSubjectRef.current.next("");
-          displayDataBehaviorSubjectRef.current.next("");
+          // 清空由状态管理
           setState((prev) => ({
             ...prev,
             displayData: "",
@@ -281,7 +272,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
         tap((arr) => setState((prev) => ({ ...prev, keyLength: arr.length }))),
         map((keys) => keysToDisplayString(keys)),
         tap((display) => {
-          displayDataBehaviorSubjectRef.current.next(display);
+          // 实时显示由状态管理
           setState((prev) => ({
             ...prev,
             displayData: display,
@@ -304,7 +295,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
     // —— 成功提示：成功后 3 秒自动隐藏；若期间有输入则取消 —— //
     const autoHideSub = enter$
       .pipe(
-        switchMap(() => timer(3000).pipe(takeUntil(notEnter$))),
+        switchMap(() => timer(successVisibleMs).pipe(takeUntil(notEnter$))),
         tap(hideSuccess)
       )
       .subscribe();
@@ -313,8 +304,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
     const escapeSub = escape$
       .pipe(
         tap(() => {
-          rawDataBehaviorSubjectRef.current.next("");
-          displayDataBehaviorSubjectRef.current.next("");
+          // 状态清空，隐藏成功提示
           setState((prev) => ({
             ...prev,
             displayData: "",
@@ -329,13 +319,17 @@ const ScanBox: React.FC<ScanBoxProps> = ({
             timestamp: null,
           });
           onScanning?.("");
+          onClear?.("escape");
         })
       )
       .subscribe();
 
     // 日志（可选）
     const logSub = kd$.subscribe((e) => {
-      console.log(`${e.key}(${e.code})[${e.charCode}]`);
+      if (debug) {
+        // eslint-disable-next-line no-console
+        console.log(`${e.key}(${e.code})[${e.charCode}]`);
+      }
     });
 
     return () => {
@@ -346,7 +340,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
       escapeSub.unsubscribe();
       logSub.unsubscribe();
     };
-  }, [handleScanComplete, onScanning, timeout]);
+  }, [handleScanComplete, onScanning, onClear, timeout, successVisibleMs, debug]);
 
 
   // 动态样式类 - 根据不同状态设置背景色
