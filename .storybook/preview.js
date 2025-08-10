@@ -1,3 +1,5 @@
+import '../src/index.css';
+
 /** @type { import('@storybook/react-vite').Preview } */
 const preview = {
   parameters: {
@@ -13,7 +15,18 @@ const preview = {
       // 'error' - fail CI on a11y violations
       // 'off' - skip a11y checks entirely
       test: "todo"
-    }
+    },
+
+    backgrounds: {
+      default: 'light',
+      values: [
+        { name: 'light', value: '#ffffff' },
+        { name: 'dark', value: '#333333' },
+        { name: 'gray', value: '#f8f9fa' },
+      ],
+    },
+
+    layout: 'padded',
   },
 };
 

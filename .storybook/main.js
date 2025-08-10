@@ -29,6 +29,13 @@ const config = {
       '@/utils': path.resolve(__dirname, '../src/utils'),
       '@/main': path.resolve(__dirname, '../src/main'),
     };
+
+    // 确保 CSS 正确处理 - Tailwind CSS v4
+    config.css = {
+      ...config.css,
+      postcss: './postcss.config.js',
+    };
+
     return config;
   },
 };

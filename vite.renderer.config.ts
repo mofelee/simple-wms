@@ -6,9 +6,11 @@ export default defineConfig(async () => {
   // 动态导入 ESM 模块
   const { default: react } = await import('@vitejs/plugin-react');
   const { TanStackRouterVite } = await import('@tanstack/router-plugin/vite');
+  const { default: tailwindcss } = await import('@tailwindcss/vite');
   
   return {
     plugins: [
+      tailwindcss(),
       TanStackRouterVite({
         routesDirectory: './src/routes',
         generatedRouteTree: './src/routeTree.gen.ts',

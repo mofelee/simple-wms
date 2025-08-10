@@ -60,12 +60,14 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-router": "^1.131.2",
     "@tanstack/router-plugin": "^1.131.2",
     "@tanstack/router-vite-plugin": "^1.131.2",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "rxjs": "^7.8.2",
     "zod": "^4.0.17"
   }
 }
