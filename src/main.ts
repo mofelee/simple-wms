@@ -1,6 +1,11 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { registerIpcHandlers, unregisterIpcHandlers } from './main/ipc/handlers';
+
+// Vite dev server variables
+declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
+declare const MAIN_WINDOW_VITE_NAME: string;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -10,10 +15,13 @@ if (started) {
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
     },
   });
 
@@ -31,12 +39,30 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  // Print application paths
+  console.log('\n=== 应用路径信息 ===');
+  console.log('应用数据目录:', app.getPath('userData'));
+  console.log('文档目录:', app.getPath('documents'));
+  console.log('下载目录:', app.getPath('downloads'));
+  console.log('桌面目录:', app.getPath('desktop'));
+  console.log('临时目录:', app.getPath('temp'));
+  console.log('应用程序目录:', app.getPath('exe'));
+  console.log('日志目录:', app.getPath('logs'));
+  console.log('==================\n');
+  
+  // Register IPC handlers before creating window
+  registerIpcHandlers();
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  // Clean up IPC handlers
+  unregisterIpcHandlers();
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
