@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { ScanBox } from "@/components/ScanBox";
 import { getAIValues, parseGS1, parseGS1Date, validateGS1 } from "@/lib/gs1-parser";
+import { parseDegreeFromApi } from "@/lib/degree";
 
 type RecordItem = {
   // 扫码相关
@@ -41,6 +42,8 @@ type RecordItem = {
   salePrice: number; // 销售价格（输入框）
   saleAmount: number; // 销售金额 = 销售价格 * 数量
   saleDate: string; // 销售日期（暂时为空）
+  customerName: string; // 顾客姓名（导入保留，录入为空，不可编辑）
+  customerPhone: string; // 顾客联系电话（导入保留，录入为空，不可编辑）
 };
 
 type TemplateForm = {
@@ -84,6 +87,8 @@ const CSV_HEADERS: string[] = [
   "销售价格",
   "销售金额",
   "销售日期",
+  "顾客姓名",
+  "顾客联系电话",
 ];
 
 function formatDateYYYYMMDD(date: Date): string {
@@ -97,6 +102,18 @@ function yymmddToYYYYMMDD(yymmdd: string | null): string {
   if (!yymmdd) return "";
   const d = parseGS1Date(yymmdd);
   return d ? formatDateYYYYMMDD(d) : "";
+}
+
+function formatUdidToParentheses(raw: string): string {
+  try {
+    const parsed = parseGS1(raw);
+    if (!parsed.isValid || parsed.elements.length === 0) {
+      return raw.replace(/\x1D/g, "");
+    }
+    return parsed.elements.map((el) => `(${el.ai})${el.value}`).join("");
+  } catch (_) {
+    return raw.replace(/\x1D/g, "");
+  }
 }
 
 function isLikelyStoreCode(data: string): boolean {
@@ -115,10 +132,7 @@ function isLikelyUDID(data: string): boolean {
   }
 }
 
-function parseDegreeFromUdid(_aiValues: Record<string, string>): string {
-  // 自定义解析逻辑，暂时返回空字符串
-  return "";
-}
+// 由 src/lib/degree.ts 提供 parseDegreeFromApi
 
 async function fetchDeviceInfoByUdiDi(udiDi: string): Promise<any | null> {
   try {
@@ -199,6 +213,8 @@ function RouteComponent() {
         salePrice,
         saleAmount: salePrice * quantity,
         saleDate: "",
+        customerName: "",
+        customerPhone: "",
       };
 
       setRecords((prev) => [...prev, newRecord]);
@@ -263,18 +279,15 @@ function RouteComponent() {
       const exp = yymmddToYYYYMMDD(aiValues["17"] || null);
       const batch = aiValues["10"] || "";
       const serial = aiValues["21"] || "";
-      const degree = parseDegreeFromUdid(aiValues);
-
-      // 先填充 AI 字段
+      // 先填充 AI 字段（UDID 规范化为括号格式，过滤掉 \x1D）
       updateRecordAt(index, (r) => ({
         ...r,
-        udidRaw,
-        udiDi,
+        udidRaw: formatUdidToParentheses(udidRaw),
+        udiDi: String(udiDi),
         productionDate: prod,
         expiryDate: exp,
         batchNumber: batch,
         serialNumber: serial,
-        degree,
       }));
 
       if (!udiDi) return; // 无01则不请求
@@ -288,6 +301,7 @@ function RouteComponent() {
         const modelSpec = info["规格型号"] || "";
         const registrantName = info["注册/备案人名称"] || "";
         const registrationNo = info["注册/备案证号"] || "";
+        const degreeFromApi = parseDegreeFromApi(info);
 
         updateRecordAt(index, (r) => ({
           ...r,
@@ -295,7 +309,12 @@ function RouteComponent() {
           modelSpec,
           registrantName,
           registrationNo,
+          degree: r.degree || degreeFromApi || r.degree,
         }));
+
+        if (!degreeFromApi || degreeFromApi === "") {
+          setStatusText("未能自动解析度数，请手动填写或调整解析规则");
+        }
       }
     },
     [updateRecordAt]
@@ -309,8 +328,6 @@ function RouteComponent() {
       const exp = yymmddToYYYYMMDD(aiValues["17"] || null);
       const batch = aiValues["10"] || "";
       const serial = aiValues["21"] || "";
-      const degree = parseDegreeFromUdid(aiValues);
-
       let deviceGeneralName = "";
       let modelSpec = "";
       let registrantName = "";
@@ -324,6 +341,10 @@ function RouteComponent() {
           modelSpec = info["规格型号"] || "";
           registrantName = info["注册/备案人名称"] || "";
           registrationNo = info["注册/备案证号"] || "";
+          const degreeFromApi = parseDegreeFromApi(info);
+          if (!degreeFromApi || degreeFromApi === "") {
+            setStatusText("未能自动解析度数，请手动填写或调整解析规则");
+          }
         }
       }
 
@@ -332,12 +353,12 @@ function RouteComponent() {
       const salePrice = parseFloat(template.salePrice || "0") || 0;
       const newRecord: RecordItem = {
         storeCode,
-        udidRaw,
-        udiDi,
+        udidRaw: formatUdidToParentheses(udidRaw),
+        udiDi: String(udiDi),
         productNameInput: template.productNameInput,
         deviceGeneralName,
         modelSpec,
-        degree,
+        degree: parseDegreeFromApi({}) || "",
         productionDate: prod,
         expiryDate: exp,
         batchNumber: batch,
@@ -358,6 +379,8 @@ function RouteComponent() {
         salePrice,
         saleAmount: salePrice * quantity,
         saleDate: "",
+        customerName: "",
+        customerPhone: "",
       };
 
       setRecords((prev) => [...prev, newRecord]);
@@ -397,6 +420,8 @@ function RouteComponent() {
         String(r.salePrice),
         String(r.saleAmount),
         r.saleDate,
+        r.customerName,
+        r.customerPhone,
       ]);
     }
 
@@ -518,6 +543,8 @@ function RouteComponent() {
         salePrice,
         saleAmount: Number(get("销售金额")) || salePrice * quantity,
         saleDate: get("销售日期"),
+        customerName: get("顾客姓名"),
+        customerPhone: get("顾客联系电话"),
       } as RecordItem;
     });
     setRecords(newRecords);
@@ -564,6 +591,22 @@ function RouteComponent() {
     setRecords((prev) => prev.filter((_, i) => i !== index));
     setStatusText("记录已删除");
   };
+
+  const fillTemplateFromRecord = useCallback((record: RecordItem) => {
+    setTemplate({
+      productNameInput: record.productNameInput || "",
+      entryDate: record.entryDate || "",
+      purchaseUnitPrice: record.purchaseUnitPrice != null ? String(record.purchaseUnitPrice) : "",
+      supplierName: record.supplierName || "",
+      supplierAddress: record.supplierAddress || "",
+      supplierContact: record.supplierContact || "",
+      purchaseDate: record.purchaseDate || "",
+      acceptanceStaff: record.acceptanceStaff || "",
+      acceptanceDate: record.acceptanceDate || "",
+      salePrice: record.salePrice != null ? String(record.salePrice) : "",
+    });
+    setStatusText("已从记录填充到模板");
+  }, []);
 
   const placeholder = `当前状态：${statusText}`;
 
@@ -720,109 +763,99 @@ function RouteComponent() {
         </div>
 
         <div className="overflow-auto border rounded">
-          <table className="min-w-[1200px] w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-gray-50">
               <tr>
                 {CSV_HEADERS.concat(["操作"]).map((h) => (
-                  <th key={h} className="px-2 py-2 text-left border-b">{h}</th>
+                  <th key={h} className="px-1 py-1 text-left border-b whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {records.map((r, idx) => (
                 <tr key={r.storeCode} className="odd:bg-white even:bg-gray-50">
-                  <td className="px-2 py-2 border-b">{r.storeCode}</td>
-                  <td className="px-2 py-2 border-b break-all">{r.udidRaw}</td>
-                  <td className="px-2 py-2 border-b">{r.udiDi}</td>
-                  <td className="px-2 py-2 border-b">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.storeCode}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.udidRaw}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.udiDi}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
                     <input className="w-40 border rounded px-2 py-1" value={r.productNameInput}
                       onChange={(e) => onRecordChange(idx, "productNameInput", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">{r.deviceGeneralName}</td>
-                  <td className="px-2 py-2 border-b">{r.modelSpec}</td>
-                  <td className="px-2 py-2 border-b">{r.degree}</td>
-                  <td className="px-2 py-2 border-b">
-                    <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.productionDate}
-                        onChange={(e) => onRecordChange(idx, "productionDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "productionDate")}>今天</button>
-                    </div>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.deviceGeneralName}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.modelSpec}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <input className="w-28 border rounded px-2 py-1" value={r.degree}
+                      onChange={(e) => onRecordChange(idx, "degree", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">
-                    <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.expiryDate}
-                        onChange={(e) => onRecordChange(idx, "expiryDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "expiryDate")}>今天</button>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 border-b">{r.batchNumber}</td>
-                  <td className="px-2 py-2 border-b">{r.serialNumber}</td>
-                  <td className="px-2 py-2 border-b">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.productionDate}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.expiryDate}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.batchNumber}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.serialNumber}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <input type="date" className="w-36 border rounded px-2 py-1" value={r.entryDate}
                         onChange={(e) => onRecordChange(idx, "entryDate", e.target.value)} />
                       <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "entryDate")}>今天</button>
                     </div>
                   </td>
-                  <td className="px-2 py-2 border-b">{r.registrantName}</td>
-                  <td className="px-2 py-2 border-b">{r.registrationNo}</td>
-                  <td className="px-2 py-2 border-b w-16">1</td>
-                  <td className="px-2 py-2 border-b w-24">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrantName}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrationNo}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-16">1</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
                     <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.purchaseUnitPrice}
                       onChange={(e) => onRecordChange(idx, "purchaseUnitPrice", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">{r.purchaseAmount.toFixed(2)}</td>
-                  <td className="px-2 py-2 border-b w-40">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.purchaseAmount.toFixed(2)}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
                     <input className="w-40 border rounded px-2 py-1" value={r.supplierName}
                       onChange={(e) => onRecordChange(idx, "supplierName", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b w-52">
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-52">
                     <input className="w-52 border rounded px-2 py-1" value={r.supplierAddress}
                       onChange={(e) => onRecordChange(idx, "supplierAddress", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b w-40">
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
                     <input className="w-40 border rounded px-2 py-1" value={r.supplierContact}
                       onChange={(e) => onRecordChange(idx, "supplierContact", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <input type="date" className="w-36 border rounded px-2 py-1" value={r.purchaseDate}
                         onChange={(e) => onRecordChange(idx, "purchaseDate", e.target.value)} />
                       <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "purchaseDate")}>今天</button>
                     </div>
                   </td>
-                  <td className="px-2 py-2 border-b">{r.acceptanceConclusion}</td>
-                  <td className="px-2 py-2 border-b w-32">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.acceptanceConclusion}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-32">
                     <input className="w-32 border rounded px-2 py-1" value={r.acceptanceStaff}
                       onChange={(e) => onRecordChange(idx, "acceptanceStaff", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <input type="date" className="w-36 border rounded px-2 py-1" value={r.acceptanceDate}
                         onChange={(e) => onRecordChange(idx, "acceptanceDate", e.target.value)} />
                       <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "acceptanceDate")}>今天</button>
                     </div>
                   </td>
-                  <td className="px-2 py-2 border-b w-24">
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
                     <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.salePrice}
                       onChange={(e) => onRecordChange(idx, "salePrice", e.target.value)} />
                   </td>
-                  <td className="px-2 py-2 border-b">{r.saleAmount.toFixed(2)}</td>
-                  <td className="px-2 py-2 border-b">
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.saleAmount.toFixed(2)}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.saleDate}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.customerName}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.customerPhone}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
                     <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.saleDate}
-                        onChange={(e) => onRecordChange(idx, "saleDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "saleDate")}>今天</button>
+                      <button className="px-2 py-1 rounded bg-gray-600 text-white" onClick={() => fillTemplateFromRecord(r)}>填充模板</button>
+                      <button className="px-2 py-1 rounded bg-red-600 text-white" onClick={() => removeRecord(idx)}>删除</button>
                     </div>
-                  </td>
-                  <td className="px-2 py-2 border-b">
-                    <button className="px-2 py-1 rounded bg-red-600 text-white" onClick={() => removeRecord(idx)}>删除</button>
                   </td>
                 </tr>
               ))}
               {records.length === 0 && (
                 <tr>
-                  <td className="px-2 py-4 text-center text-gray-500" colSpan={CSV_HEADERS.length + 1}>
+                  <td className="px-1 py-3 text-center text-gray-500" colSpan={CSV_HEADERS.length + 1}>
                     暂无记录，请先扫描店内码
                   </td>
                 </tr>
