@@ -7,11 +7,13 @@ export interface KeyInfo {
   code: string;
   charCode: number;
   timestamp: number;
-}
-
-export interface ScanData {
-  buf: KeyInfo[];
-  out: KeyInfo[];
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  metaKey: boolean;
+  repeat: boolean;
+  composed: boolean;
+  isComposing: boolean;
 }
 
 export interface ScanResult {
@@ -65,13 +67,16 @@ export interface ScanBoxProps {
 
 export interface ScanBoxState {
   /** 当前输入的数据 */
-  currentData: string;
+  displayData: string;
   
   /** 是否正在扫码 */
   isScanning: boolean;
   
   /** 是否已聚焦 */
   isFocused: boolean;
+
+  /** 当前输入的数据长度 */
+  keyLength: number;
   
   /** 最后扫码时间 */
   lastScanTime: Date | null;

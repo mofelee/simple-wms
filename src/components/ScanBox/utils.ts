@@ -50,15 +50,53 @@ export function keysToParseString(keys: KeyInfo[]): string {
     .join("");
 }
 
+const keyEmojiMap = {
+  'Escape': '[⎋]',
+  'Enter': '[⏎]',
+  'Tab': '[⇥]',
+  'Backspace': '[⌫]',
+  'Delete': '[⌦]',
+  'Shift': '[⇧]',
+  'Control': '[⌃]',
+  'Meta': '[⌘]',   // Mac Command
+  'Alt': '[⌥]',
+  'ArrowUp': '[↑]',
+  'ArrowDown': '[↓]',
+  'ArrowLeft': '[←]',
+  'ArrowRight': '[→]',
+  'PageUp': '[⇞]',
+  'PageDown': '[⇟]',
+  'Home': '[↖]',
+  'End': '[↘]',
+  'Insert': '[↴]',
+  'F1': '[F1]',
+  'F2': '[F2]',
+  'F3': '[F3]',
+  'F4': '[F4]',
+  'F5': '[F5]',
+  'F6': '[F6]',
+  'F7': '[F7]',
+  'F8': '[F8]',
+  'F9': '[F9]',
+  'F10': '[F10]',
+  'F11': '[F11]',
+  'F12': '[F12]',
+};
+
 /**
  * 将 KeyInfo 数组转换为显示字符串
  */
 export function keysToDisplayString(keys: KeyInfo[]): string {
   return keys
     .map((key) => {
+      if(keyEmojiMap[key.key as keyof typeof keyEmojiMap]) {
+        return keyEmojiMap[key.key as keyof typeof keyEmojiMap];
+      }
+
       if (key.charCode < 32 || key.charCode === 127) {
         return `[${key.code}]`;
       }
+
       return key.key;
     })
     .join("");
@@ -108,5 +146,12 @@ export function createKeyInfo(event: React.KeyboardEvent): KeyInfo {
     code: event.code,
     charCode: key.length === 1 ? key.charCodeAt(0) : 0,
     timestamp: Date.now(),
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    metaKey: event.metaKey,
+    repeat: event.repeat,
+    composed: event.nativeEvent.composed,
+    isComposing: event.nativeEvent.isComposing,
   };
 }
