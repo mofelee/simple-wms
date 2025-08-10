@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestRouteImport } from './routes/test'
+import { Route as CsvscannerRouteImport } from './routes/csvscanner'
 import { Route as IndexRouteImport } from './routes/index'
 
 const TestRoute = TestRouteImport.update({
   id: '/test',
   path: '/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CsvscannerRoute = CsvscannerRouteImport.update({
+  id: '/csvscanner',
+  path: '/csvscanner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/csvscanner': typeof CsvscannerRoute
   '/test': typeof TestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/csvscanner': typeof CsvscannerRoute
   '/test': typeof TestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/csvscanner': typeof CsvscannerRoute
   '/test': typeof TestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/test'
+  fullPaths: '/' | '/csvscanner' | '/test'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/test'
-  id: '__root__' | '/' | '/test'
+  to: '/' | '/csvscanner' | '/test'
+  id: '__root__' | '/' | '/csvscanner' | '/test'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CsvscannerRoute: typeof CsvscannerRoute
   TestRoute: typeof TestRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/test'
       fullPath: '/test'
       preLoaderRoute: typeof TestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/csvscanner': {
+      id: '/csvscanner'
+      path: '/csvscanner'
+      fullPath: '/csvscanner'
+      preLoaderRoute: typeof CsvscannerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CsvscannerRoute: CsvscannerRoute,
   TestRoute: TestRoute,
 }
 export const routeTree = rootRouteImport
