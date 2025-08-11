@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestRouteImport } from './routes/test'
+import { Route as PrinterRouteImport } from './routes/printer'
 import { Route as CsvscannerRouteImport } from './routes/csvscanner'
 import { Route as IndexRouteImport } from './routes/index'
 
 const TestRoute = TestRouteImport.update({
   id: '/test',
   path: '/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrinterRoute = PrinterRouteImport.update({
+  id: '/printer',
+  path: '/printer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CsvscannerRoute = CsvscannerRouteImport.update({
@@ -32,30 +38,34 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
+  '/printer': typeof PrinterRoute
   '/test': typeof TestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
+  '/printer': typeof PrinterRoute
   '/test': typeof TestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
+  '/printer': typeof PrinterRoute
   '/test': typeof TestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/csvscanner' | '/test'
+  fullPaths: '/' | '/csvscanner' | '/printer' | '/test'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/csvscanner' | '/test'
-  id: '__root__' | '/' | '/csvscanner' | '/test'
+  to: '/' | '/csvscanner' | '/printer' | '/test'
+  id: '__root__' | '/' | '/csvscanner' | '/printer' | '/test'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CsvscannerRoute: typeof CsvscannerRoute
+  PrinterRoute: typeof PrinterRoute
   TestRoute: typeof TestRoute
 }
 
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/test'
       fullPath: '/test'
       preLoaderRoute: typeof TestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/printer': {
+      id: '/printer'
+      path: '/printer'
+      fullPath: '/printer'
+      preLoaderRoute: typeof PrinterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/csvscanner': {
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CsvscannerRoute: CsvscannerRoute,
+  PrinterRoute: PrinterRoute,
   TestRoute: TestRoute,
 }
 export const routeTree = rootRouteImport

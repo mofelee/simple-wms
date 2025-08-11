@@ -345,7 +345,7 @@ const ScanBox: React.FC<ScanBoxProps> = ({
 
   // 动态样式类 - 根据不同状态设置背景色
   const getContainerStyles = () => {
-    let baseClasses =
+    const baseClasses =
       "w-full min-h-[120px] p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md";
 
     if (disabled) {

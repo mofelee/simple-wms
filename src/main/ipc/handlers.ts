@@ -30,6 +30,7 @@ import { fileService } from '@/main/services/file';
 import { systemService } from '@/main/services/system';
 import { taskService } from '@/main/services/task';
 import { windowService } from '@/main/services/window';
+import { printerService } from '@/main/services/printer';
 
 // Zod 验证 schemas
 const GetUserByIdSchema = z.object({
@@ -171,6 +172,9 @@ export function registerIpcHandlers(): void {
   channels.forEach(channel => console.log(`  - ${channel}`));
   console.log('====================\n');
 
+  // 初始化加载打印配置
+  printerService.loadConfig().catch((e) => console.warn('Load printer config failed:', e));
+
   // 用户管理处理器
   ipcMain.handle(
     IPC.user.getById,
@@ -309,6 +313,58 @@ export function registerIpcHandlers(): void {
     IPC.system.getAppPaths,
     safeHandler(z.object({}), async () => {
       return await systemService.getAppPaths();
+    })
+  );
+
+  // 打印/HTTP 服务处理器
+  ipcMain.handle(
+    IPC.printer.getConfig,
+    safeHandler(z.object({}).optional().default({}), async () => {
+      return printerService.getConfig();
+    })
+  );
+
+  ipcMain.handle(
+    IPC.printer.setConfig,
+    safeHandler(z.object({
+      printerIp: z.string().optional(),
+      printerPort: z.number().int().positive().optional(),
+      httpPort: z.number().int().positive().optional(),
+      enabled: z.boolean().optional(),
+    }).optional().default({}), async (req) => {
+      return await printerService.saveConfig(req);
+    })
+  );
+
+  ipcMain.handle(
+    IPC.printer.startHttp,
+    safeHandler(z.object({ port: z.number().int().positive().optional() }).optional().default({}), async (req: any) => {
+      return await printerService.startHttp(req?.port);
+    })
+  );
+
+  ipcMain.handle(
+    IPC.printer.stopHttp,
+    safeHandler(z.object({}).optional().default({}), async () => {
+      return await printerService.stopHttp();
+    })
+  );
+
+  ipcMain.handle(
+    IPC.printer.testPrint,
+    safeHandler(z.object({ 
+      data: z.string().min(1),
+      description: z.string().optional()
+    }), async (req: { data: string; description?: string }) => {
+      await printerService.testPrint(req.data, req.description);
+      return { success: true } as any;
+    })
+  );
+
+  ipcMain.handle(
+    IPC.printer.getStatus,
+    safeHandler(z.object({}).optional().default({}), async () => {
+      return printerService.getStatus();
     })
   );
 

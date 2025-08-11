@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers, unregisterIpcHandlers } from '@/main/ipc/handlers';
@@ -25,6 +25,45 @@ const createWindow = () => {
     },
   });
 
+  // 配置新窗口打开处理器
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.log('🔗 新窗口打开请求:', url);
+    
+    try {
+      const urlObj = new URL(url);
+      
+      // 检查是否是内部路由（包含 hash 路由）
+      const isInternal = urlObj.hash && urlObj.hash.startsWith('#/');
+      
+      if (!isInternal) {
+        // 外部链接用系统浏览器打开
+        console.log('🌐 外部链接，使用系统浏览器打开:', url);
+        shell.openExternal(url);
+        return { action: 'deny' };
+      }
+      
+      // 内部路由允许打开并配置 preload 脚本
+      console.log('🏠 内部路由，在新窗口中打开:', url);
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 1200,
+          height: 800,
+          webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false,
+          }
+        }
+      };
+    } catch (error) {
+      console.error('❌ URL 解析失败:', error);
+      // 解析失败时拒绝打开
+      return { action: 'deny' };
+    }
+  });
+
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -33,7 +72,7 @@ const createWindow = () => {
   }
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished

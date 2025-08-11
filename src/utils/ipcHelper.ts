@@ -160,7 +160,7 @@ export class IpcCache {
   /**
    * 设置缓存
    */
-  set<T>(key: string, data: T, ttlMs: number = 60000): void {
+  set<T>(key: string, data: T, ttlMs = 60000): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -218,7 +218,7 @@ export async function callIpcWithCache<T>(
   key: string,
   ipcCall: () => Promise<ApiResponse<T>>,
   cache: IpcCache,
-  ttlMs: number = 60000,
+  ttlMs = 60000,
   options: IpcCallOptions = {}
 ): Promise<T> {
   // 先检查缓存
@@ -252,7 +252,7 @@ export class IpcQueue {
   private concurrency: number;
   private activeJobs = 0;
   
-  constructor(concurrency: number = 3) {
+  constructor(concurrency = 3) {
     this.concurrency = concurrency;
   }
   
@@ -262,7 +262,7 @@ export class IpcQueue {
   add<T>(
     id: string,
     call: () => Promise<ApiResponse<T>>,
-    priority: number = 0
+    priority = 0
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       this.queue.push({

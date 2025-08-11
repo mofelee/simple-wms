@@ -578,7 +578,7 @@ export function parseGS1WithGSSeparator(input: string): RawGS1ParseResult {
         position += fixedLength;
       } else {
         // Variable length AI - extract until next GS or end of input
-        let nextGS = input.indexOf('\x1D', position);
+        const nextGS = input.indexOf('\x1D', position);
         if (nextGS === -1) {
           // No GS found, take rest of input
           value = input.substring(position);

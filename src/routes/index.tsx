@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
 function IndexComponent() {
@@ -29,6 +29,11 @@ function IndexComponent() {
       <div>
         <a href="#/test" target="_blank">
           测试
+        </a>
+      </div>
+      <div>
+        <a href="#/printer" target="_blank">
+          打印机配置
         </a>
       </div>
     </div>

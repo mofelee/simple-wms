@@ -21,8 +21,18 @@ import {
   Task,
   ApiResponse,
   FileProgressData,
-  TaskProgressData
+  TaskProgressData,
+  PrinterConfig,
+  SetPrinterConfigReq,
+  StartHttpReq,
+  StopHttpReq,
+  TestPrintReq,
+  PrinterStatus
 } from '@/common/ipc';
+
+// 调试信息：确认 preload 脚本正在执行
+console.log('🔧 Preload script loaded successfully');
+console.log('📦 Available IPC channels:', Object.values(IPC).flatMap(group => Object.values(group)));
 
 /**
  * 带超时的 invoke 封装
@@ -273,10 +283,65 @@ const api = {
       return invokeWithTimeout(IPC.window.open, { url, options });
     },
   },
+
+  // 打印机/HTTP 打印服务 API
+  printer: {
+    /**
+     * 获取打印机配置
+     */
+    async getConfig(): Promise<ApiResponse<PrinterConfig>> {
+      return invokeWithTimeout(IPC.printer.getConfig, {});
+    },
+
+    /**
+     * 设置打印机配置
+     */
+    async setConfig(config: SetPrinterConfigReq): Promise<ApiResponse<PrinterConfig>> {
+      return invokeWithTimeout(IPC.printer.setConfig, config);
+    },
+
+    /**
+     * 启动 HTTP 服务
+     */
+    async startHttp(port?: number): Promise<ApiResponse<PrinterStatus>> {
+      return invokeWithTimeout(IPC.printer.startHttp, { port } satisfies StartHttpReq);
+    },
+
+    /**
+     * 停止 HTTP 服务
+     */
+    async stopHttp(): Promise<ApiResponse<PrinterStatus>> {
+      return invokeWithTimeout(IPC.printer.stopHttp, {} satisfies StopHttpReq);
+    },
+
+    /**
+     * 获取打印机状态
+     */
+    async getStatus(): Promise<ApiResponse<PrinterStatus>> {
+      return invokeWithTimeout(IPC.printer.getStatus, {});
+    },
+
+    /**
+     * 测试打印
+     */
+    async testPrint(data: string, description?: string): Promise<ApiResponse<{ success: boolean }>> {
+      return invokeWithTimeout(IPC.printer.testPrint, { data, description } satisfies TestPrintReq);
+    },
+  },
 } as const;
 
 // 暴露安全的 API 到渲染进程
 contextBridge.exposeInMainWorld('electronAPI', api);
+
+// 调试信息：确认 API 已暴露
+console.log('✅ electronAPI exposed to main world with the following methods:');
+console.log('  - user:', Object.keys(api.user));
+console.log('  - file:', Object.keys(api.file));
+console.log('  - system:', Object.keys(api.system));
+console.log('  - task:', Object.keys(api.task));
+console.log('  - window:', Object.keys(api.window));
+console.log('  - dev:', Object.keys(api.dev));
+console.log('  - printer:', Object.keys(api.printer));
 
 // TypeScript 类型声明
 declare global {

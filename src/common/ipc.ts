@@ -40,6 +40,15 @@ export const IPC = {
     close: 'window:close',
     focus: 'window:focus',
   },
+  // 打印机/HTTP 打印服务
+  printer: {
+    getConfig: 'printer:getConfig',
+    setConfig: 'printer:setConfig',
+    startHttp: 'printer:startHttp',
+    stopHttp: 'printer:stopHttp',
+    testPrint: 'printer:testPrint',
+    getStatus: 'printer:getStatus',
+  },
 } as const;
 
 // 用户相关类型
@@ -169,6 +178,29 @@ export interface FocusWindowReq {
   windowId: string;
 }
 
+// 打印相关类型
+export interface PrinterConfig {
+  printerIp: string;
+  printerPort: number; // 目标打印机端口，默认 9100
+  httpPort: number;    // 本地 HTTP 服务端口，默认 18080
+  enabled?: boolean;
+}
+
+export type SetPrinterConfigReq = Partial<PrinterConfig>
+
+export interface StartHttpReq { port?: number }
+export interface StopHttpReq {}
+export interface TestPrintReq { 
+  data: string; // base64 encoded ESC/POS binary data
+  description?: string; // 可选的描述信息
+}
+
+export interface PrinterStatus {
+  httpRunning: boolean;
+  httpPort?: number;
+  lastError?: string;
+}
+
 // API 响应包装类型
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -203,7 +235,13 @@ export type IpcChannels =
   | typeof IPC.task.onComplete
   | typeof IPC.window.open
   | typeof IPC.window.close
-  | typeof IPC.window.focus;
+  | typeof IPC.window.focus
+  | typeof IPC.printer.getConfig
+  | typeof IPC.printer.setConfig
+  | typeof IPC.printer.startHttp
+  | typeof IPC.printer.stopHttp
+  | typeof IPC.printer.testPrint
+  | typeof IPC.printer.getStatus;
 
 // 工具类型：提取值类型
 export type ExtractChannelValue<T> = T extends Record<string, infer U> ? U : never;
