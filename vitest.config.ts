@@ -22,6 +22,26 @@ export default defineConfig({
   },
   test: {
     projects: [
+      // Unit tests project
+      {
+        resolve: {
+          alias: {
+            '@': path.resolve(dirname, 'src'),
+            '@/components': path.resolve(dirname, 'src/components'),
+            '@/common': path.resolve(dirname, 'src/common'),
+            '@/utils': path.resolve(dirname, 'src/utils'),
+            '@/lib': path.resolve(dirname, 'src/lib'),
+            '@/main': path.resolve(dirname, 'src/main'),
+          },
+        },
+        test: {
+          name: 'unit',
+          include: ['src/**/*.{test,spec}.{js,ts,tsx}'],
+          exclude: ['src/**/*.stories.{js,ts,tsx}'],
+          environment: 'jsdom',
+        },
+      },
+      // Storybook tests project
       {
         extends: true,
         plugins: [

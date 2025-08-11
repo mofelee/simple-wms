@@ -3,6 +3,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { ScanBox } from "@/components/ScanBox";
 import { getAIValues, parseGS1, parseGS1Date, validateGS1 } from "@/lib/gs1-parser";
 import { parseDegreeFromApi } from "@/lib/degree";
+import { usePrompt } from "@/components/ui/prompt";
 
 type RecordItem = {
   // 扫码相关
@@ -156,6 +157,8 @@ export const Route = createFileRoute("/csvscanner")({
 });
 
 function RouteComponent() {
+  const prompt = usePrompt();
+  
   const [template, setTemplate] = useState<TemplateForm>({
     productNameInput: "",
     entryDate: "",
@@ -224,7 +227,23 @@ function RouteComponent() {
   );
 
   const updateRecordAt = useCallback((index: number, updater: (r: RecordItem) => RecordItem) => {
-    setRecords((prev) => prev.map((r, i) => (i === index ? updater(r) : r)));
+    setRecords((prev) => {
+      const newRecords = prev.map((r, i) => {
+        if (i === index) {
+          const updated = updater(r);
+          if (r.degree !== updated.degree) {
+            console.log('🔍 Record degree updated:', { 
+              index, 
+              from: r.degree, 
+              to: updated.degree 
+            });
+          }
+          return updated;
+        }
+        return r;
+      });
+      return newRecords;
+    });
   }, []);
 
   const handleScan = useCallback(
@@ -301,7 +320,7 @@ function RouteComponent() {
         const modelSpec = info["规格型号"] || "";
         const registrantName = info["注册/备案人名称"] || "";
         const registrationNo = info["注册/备案证号"] || "";
-        const degreeFromApi = parseDegreeFromApi(info);
+        const degreeFromApi = await parseDegreeFromApi(info, prompt);
 
         updateRecordAt(index, (r) => ({
           ...r,
@@ -309,7 +328,7 @@ function RouteComponent() {
           modelSpec,
           registrantName,
           registrationNo,
-          degree: r.degree || degreeFromApi || r.degree,
+          degree: degreeFromApi || r.degree,
         }));
 
         if (!degreeFromApi || degreeFromApi === "") {
@@ -317,7 +336,7 @@ function RouteComponent() {
         }
       }
     },
-    [updateRecordAt]
+    [updateRecordAt, prompt]
   );
 
   const createRecordWithUdid = useCallback(
@@ -332,6 +351,7 @@ function RouteComponent() {
       let modelSpec = "";
       let registrantName = "";
       let registrationNo = "";
+      let degreeFromApi: string = "";
       if (udiDi) {
         setLoadingUdiInfo(true);
         const info = await fetchDeviceInfoByUdiDi(udiDi);
@@ -341,7 +361,7 @@ function RouteComponent() {
           modelSpec = info["规格型号"] || "";
           registrantName = info["注册/备案人名称"] || "";
           registrationNo = info["注册/备案证号"] || "";
-          const degreeFromApi = parseDegreeFromApi(info);
+          degreeFromApi = await parseDegreeFromApi(info, prompt);
           if (!degreeFromApi || degreeFromApi === "") {
             setStatusText("未能自动解析度数，请手动填写或调整解析规则");
           }
@@ -358,7 +378,7 @@ function RouteComponent() {
         productNameInput: template.productNameInput,
         deviceGeneralName,
         modelSpec,
-        degree: parseDegreeFromApi({}) || "",
+        degree: degreeFromApi || "",
         productionDate: prod,
         expiryDate: exp,
         batchNumber: batch,
@@ -385,7 +405,7 @@ function RouteComponent() {
 
       setRecords((prev) => [...prev, newRecord]);
     },
-    [template]
+    [template, prompt]
   );
 
   const handleExportCSV = useCallback(() => {
@@ -776,7 +796,11 @@ function RouteComponent() {
                 <tr key={r.storeCode} className="odd:bg-white even:bg-gray-50">
                   <td className="px-1 py-1 border-b whitespace-nowrap">{r.storeCode}</td>
                   <td className="px-1 py-1 border-b whitespace-nowrap">{r.udidRaw}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.udiDi}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <a href={`https://udi.hemaoptical.com/devices-chinese?q=${r.udiDi}`} target="_blank" rel="noopener noreferrer">
+                      {r.udiDi}
+                    </a>
+                  </td>
                   <td className="px-1 py-1 border-b whitespace-nowrap">
                     <input className="w-40 border rounded px-2 py-1" value={r.productNameInput}
                       onChange={(e) => onRecordChange(idx, "productNameInput", e.target.value)} />

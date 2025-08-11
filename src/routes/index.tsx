@@ -36,6 +36,11 @@ function IndexComponent() {
           打印机配置
         </a>
       </div>
+      <div>
+        <a href="#/prompt-test" target="_blank">
+          Prompt 组件测试
+        </a>
+      </div>
     </div>
   );
 }
