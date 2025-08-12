@@ -4,6 +4,7 @@ import { ScanBox } from "@/components/ScanBox";
 import { getAIValues, parseGS1, parseGS1Date, validateGS1 } from "@/lib/gs1-parser";
 import { parseDegreeFromApi } from "@/lib/degree";
 import { usePrompt } from "@/components/ui/prompt";
+import { DegreeInput } from "@/components/ui/DegreeInput";
 
 type RecordItem = {
   // 扫码相关
@@ -179,8 +180,15 @@ function RouteComponent() {
   const [loadingUdiInfo, setLoadingUdiInfo] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordsContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 度数输入弹窗相关状态
+  const [showDegreeInput, setShowDegreeInput] = useState<boolean>(false);
+  const [degreeInputRecordIndex, setDegreeInputRecordIndex] = useState<number | null>(null);
+  const [degreeInputResolver, setDegreeInputResolver] = useState<((value: string | null) => void) | null>(null);
 
   const todayStr = useMemo(() => formatDateYYYYMMDD(new Date()), []);
+
+
 
   // 滚动到记录列表底部
   const scrollToBottom = useCallback(() => {
@@ -275,6 +283,58 @@ function RouteComponent() {
       return newRecords;
     });
   }, []);
+
+  // 获取上一条记录的度数作为默认值
+  const getPreviousRecordDegree = useCallback((): string => {
+    // 从最新的记录往前查找最近的有度数的记录
+    for (let i = records.length - 1; i >= 0; i--) {
+      const record = records[i];
+      if (record && record.degree && record.degree.trim() !== "") {
+        let degree = record.degree.trim();
+        // 确保正数显示+号
+        if (!degree.startsWith('+') && !degree.startsWith('-')) {
+          const numValue = parseFloat(degree);
+          if (numValue > 0) {
+            degree = `+${degree}`;
+          }
+        }
+        return degree;
+      }
+    }
+    return ""; // 如果没有找到，返回空字符串
+  }, [records]);
+
+  // 自定义度数输入函数，用于传给 parseDegreeFromApi
+  const customDegreePrompt = useCallback((options: { title?: string; description?: string; placeholder?: string; defaultValue?: string; required?: boolean }) => {
+    return new Promise<string | null>((resolve) => {
+      const previousDegree = getPreviousRecordDegree();
+      const defaultValue = previousDegree || options.defaultValue || "";
+      
+      setDegreeInputResolver(() => resolve);
+      setShowDegreeInput(true);
+      // 这里我们不设置 degreeInputRecordIndex，因为我们只是获取输入值
+    });
+  }, [getPreviousRecordDegree]);
+
+  // 处理度数输入确认
+  const handleDegreeInputConfirm = useCallback((degree: string) => {
+    if (degreeInputResolver) {
+      degreeInputResolver(degree);
+      setDegreeInputResolver(null);
+    }
+    setShowDegreeInput(false);
+    setDegreeInputRecordIndex(null);
+  }, [degreeInputResolver]);
+
+  // 处理度数输入取消
+  const handleDegreeInputCancel = useCallback(() => {
+    if (degreeInputResolver) {
+      degreeInputResolver(null);
+      setDegreeInputResolver(null);
+    }
+    setShowDegreeInput(false);
+    setDegreeInputRecordIndex(null);
+  }, [degreeInputResolver]);
 
   const handleScan = useCallback(
     async (result: { rawData: string }) => {
@@ -377,7 +437,7 @@ function RouteComponent() {
         const modelSpec = info["规格型号"] || "";
         const registrantName = info["注册/备案人名称"] || "";
         const registrationNo = info["注册/备案证号"] || "";
-        const degreeFromApi = await parseDegreeFromApi(info, prompt);
+        const degreeFromApi = await parseDegreeFromApi(info, customDegreePrompt);
 
         updateRecordAt(index, (r) => {
           const quantity = r.quantity || 1;
@@ -397,12 +457,10 @@ function RouteComponent() {
           };
         });
 
-        if (!degreeFromApi || degreeFromApi === "") {
-          setStatusText("未能自动解析度数，请手动填写或调整解析规则");
-        }
+        // 度数解析已在 parseDegreeFromApi 中处理，包括弹窗输入
       }
     },
-    [updateRecordAt, prompt, template]
+    [updateRecordAt, customDegreePrompt, template]
   );
 
   const createRecordWithUdid = useCallback(
@@ -427,10 +485,8 @@ function RouteComponent() {
           modelSpec = info["规格型号"] || "";
           registrantName = info["注册/备案人名称"] || "";
           registrationNo = info["注册/备案证号"] || "";
-          degreeFromApi = await parseDegreeFromApi(info, prompt);
-          if (!degreeFromApi || degreeFromApi === "") {
-            setStatusText("未能自动解析度数，请手动填写或调整解析规则");
-          }
+          degreeFromApi = await parseDegreeFromApi(info, customDegreePrompt);
+          // 度数解析已在 parseDegreeFromApi 中处理，包括弹窗输入
         }
       }
 
@@ -471,7 +527,7 @@ function RouteComponent() {
 
       setRecords((prev) => [...prev, newRecord]);
     },
-    [template, prompt]
+    [template, customDegreePrompt]
   );
 
   const handleExportCSV = useCallback(() => {
@@ -634,14 +690,19 @@ function RouteComponent() {
       } as RecordItem;
     });
     setRecords(newRecords);
-    // 自动选中最后一条导入的记录
+    // 自动选中最后一条导入的记录并滚动到该位置
     if (newRecords.length > 0) {
-      setSelectedRecordIndex(newRecords.length - 1);
+      const lastIndex = newRecords.length - 1;
+      setSelectedRecordIndex(lastIndex);
+      // 延迟滚动，确保DOM已更新
+      setTimeout(() => {
+        scrollToRecord(lastIndex);
+      }, 100);
       setStatusText(`CSV已导入 ${newRecords.length} 条记录，已选中最后一条`);
     } else {
       setStatusText("CSV已导入，无有效记录");
     }
-  }, []);
+  }, [scrollToRecord]);
 
   const setTodayForTemplate = useCallback((key: keyof TemplateForm) => {
     setTemplate((t) => ({ ...t, [key]: todayStr }));
@@ -1012,6 +1073,16 @@ function RouteComponent() {
           </div>
         </div>
       </section>
+
+      {/* 度数输入弹窗 */}
+      <DegreeInput
+        open={showDegreeInput}
+        defaultValue={getPreviousRecordDegree()}
+        onConfirm={handleDegreeInputConfirm}
+        onCancel={handleDegreeInputCancel}
+        title="手动填写度数"
+        description="未能自动解析度数，请手动填写。可使用箭头键快速调整度数。"
+      />
     </div>
   );
 }
