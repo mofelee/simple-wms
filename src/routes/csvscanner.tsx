@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { ScanBox } from "@/components/ScanBox";
 import { getAIValues, parseGS1, parseGS1Date, validateGS1 } from "@/lib/gs1-parser";
 import { parseDegreeFromApi } from "@/lib/degree";
@@ -174,11 +174,39 @@ function RouteComponent() {
 
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [currentStoreCode, setCurrentStoreCode] = useState<string | null>(null);
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
   const [statusText, setStatusText] = useState<string>("请先扫描店内码");
   const [loadingUdiInfo, setLoadingUdiInfo] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recordsContainerRef = useRef<HTMLDivElement>(null);
 
   const todayStr = useMemo(() => formatDateYYYYMMDD(new Date()), []);
+
+  // 滚动到记录列表底部
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      if (recordsContainerRef.current) {
+        // 滚动到表格容器的底部
+        const tableContainer = recordsContainerRef.current.querySelector('.overflow-auto');
+        if (tableContainer) {
+          tableContainer.scrollTop = tableContainer.scrollHeight;
+        }
+      }
+    }, 200);
+  }, []);
+
+  const scrollToRecord = useCallback((index: number) => {
+    setTimeout(() => {
+      if (recordsContainerRef.current) {
+        const tableContainer = recordsContainerRef.current.querySelector('.overflow-auto');
+        const rows = recordsContainerRef.current.querySelectorAll('tbody tr');
+        if (tableContainer && rows[index]) {
+          const row = rows[index] as HTMLElement;
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }, 200);
+  }, []);
 
   const ensureRecordByStoreCode = useCallback(
     (storeCode: string): number => {
@@ -221,6 +249,8 @@ function RouteComponent() {
       };
 
       setRecords((prev) => [...prev, newRecord]);
+      // 新记录创建后滚动到底部
+      scrollToBottom();
       return records.length; // 新记录索引（基于当前快照）
     },
     [records, template]
@@ -256,17 +286,26 @@ function RouteComponent() {
       const udid = !store && isLikelyUDID(data);
 
       if (store) {
-        // 店内码：创建或定位记录，提醒扫描UDID
+        // 店内码：创建或定位记录，自动选中该记录
         const idx = ensureRecordByStoreCode(data);
         setCurrentStoreCode(data);
-        setStatusText("店内码已记录，请扫描UDID");
+        setSelectedRecordIndex(idx);
+        scrollToRecord(idx);
+        setStatusText(`店内码已记录，已选中第 ${idx + 1} 条记录，请扫描UDID`);
         return;
       }
 
       if (udid) {
+        // 如果有选中的记录，直接更新选中的记录并合并模板数据
+        if (selectedRecordIndex !== null && selectedRecordIndex < records.length) {
+          await applyUdidToRecord(selectedRecordIndex, data, true);
+          setStatusText("UDID已解析，选中记录已更新（已合并模板数据）");
+          return;
+        }
+
         if (!currentStoreCode) {
           // 第一次就是UDID：忽略
-          setStatusText("已忽略UDID，请先扫描店内码");
+          setStatusText("已忽略UDID，请先扫描店内码或选择一条记录");
           return;
         }
 
@@ -275,29 +314,34 @@ function RouteComponent() {
           // 没有现有记录：直接创建并填充
           await createRecordWithUdid(currentStoreCode, data);
           setStatusText("UDID已解析，记录已创建并填充");
+          // 自动选中新创建的记录
+          setSelectedRecordIndex(records.length);
           return;
         }
 
         // 两次连续UDID：覆盖当前记录
         await applyUdidToRecord(idx, data);
         setStatusText("UDID已解析（覆盖当前记录）");
+        // 选中更新的记录
+        setSelectedRecordIndex(idx);
         return;
       }
 
       // 其他：不识别
       setStatusText("未识别的条码，请扫描店内码或UDID");
     },
-    [currentStoreCode, ensureRecordByStoreCode, records]
+    [currentStoreCode, ensureRecordByStoreCode, records, selectedRecordIndex, setSelectedRecordIndex, scrollToRecord]
   );
 
   const applyUdidToRecord = useCallback(
-    async (index: number, udidRaw: string) => {
+    async (index: number, udidRaw: string, mergeWithTemplate: boolean = false) => {
       const aiValues = getAIValues(udidRaw);
       const udiDi = aiValues["01"] || "";
       const prod = yymmddToYYYYMMDD(aiValues["11"] || null);
       const exp = yymmddToYYYYMMDD(aiValues["17"] || null);
       const batch = aiValues["10"] || "";
       const serial = aiValues["21"] || "";
+      
       // 先填充 AI 字段（UDID 规范化为括号格式，过滤掉 \x1D）
       updateRecordAt(index, (r) => ({
         ...r,
@@ -307,6 +351,19 @@ function RouteComponent() {
         expiryDate: exp,
         batchNumber: batch,
         serialNumber: serial,
+        // 如果需要合并模板数据，则合并非空的模板字段
+        ...(mergeWithTemplate && {
+          productNameInput: template.productNameInput || r.productNameInput,
+          entryDate: template.entryDate || r.entryDate,
+          purchaseUnitPrice: template.purchaseUnitPrice ? parseFloat(template.purchaseUnitPrice) : r.purchaseUnitPrice,
+          supplierName: template.supplierName || r.supplierName,
+          supplierAddress: template.supplierAddress || r.supplierAddress,
+          supplierContact: template.supplierContact || r.supplierContact,
+          purchaseDate: template.purchaseDate || r.purchaseDate,
+          acceptanceStaff: template.acceptanceStaff || r.acceptanceStaff,
+          acceptanceDate: template.acceptanceDate || r.acceptanceDate,
+          salePrice: template.salePrice ? parseFloat(template.salePrice) : r.salePrice,
+        }),
       }));
 
       if (!udiDi) return; // 无01则不请求
@@ -322,21 +379,30 @@ function RouteComponent() {
         const registrationNo = info["注册/备案证号"] || "";
         const degreeFromApi = await parseDegreeFromApi(info, prompt);
 
-        updateRecordAt(index, (r) => ({
-          ...r,
-          deviceGeneralName,
-          modelSpec,
-          registrantName,
-          registrationNo,
-          degree: degreeFromApi || r.degree,
-        }));
+        updateRecordAt(index, (r) => {
+          const quantity = r.quantity || 1;
+          const purchaseUnitPrice = r.purchaseUnitPrice || 0;
+          const salePrice = r.salePrice || 0;
+          
+          return {
+            ...r,
+            deviceGeneralName,
+            modelSpec,
+            registrantName,
+            registrationNo,
+            degree: degreeFromApi || r.degree,
+            // 重新计算金额（以防价格被模板更新）
+            purchaseAmount: purchaseUnitPrice * quantity,
+            saleAmount: salePrice * quantity,
+          };
+        });
 
         if (!degreeFromApi || degreeFromApi === "") {
           setStatusText("未能自动解析度数，请手动填写或调整解析规则");
         }
       }
     },
-    [updateRecordAt, prompt]
+    [updateRecordAt, prompt, template]
   );
 
   const createRecordWithUdid = useCallback(
@@ -568,7 +634,13 @@ function RouteComponent() {
       } as RecordItem;
     });
     setRecords(newRecords);
-    setStatusText("CSV已导入");
+    // 自动选中最后一条导入的记录
+    if (newRecords.length > 0) {
+      setSelectedRecordIndex(newRecords.length - 1);
+      setStatusText(`CSV已导入 ${newRecords.length} 条记录，已选中最后一条`);
+    } else {
+      setStatusText("CSV已导入，无有效记录");
+    }
   }, []);
 
   const setTodayForTemplate = useCallback((key: keyof TemplateForm) => {
@@ -609,8 +681,25 @@ function RouteComponent() {
 
   const removeRecord = (index: number) => {
     setRecords((prev) => prev.filter((_, i) => i !== index));
+    // 如果删除的是选中的记录，清除选中状态
+    if (selectedRecordIndex === index) {
+      setSelectedRecordIndex(null);
+    } else if (selectedRecordIndex !== null && selectedRecordIndex > index) {
+      // 如果删除的记录在选中记录之前，需要调整选中索引
+      setSelectedRecordIndex(selectedRecordIndex - 1);
+    }
     setStatusText("记录已删除");
   };
+
+  const selectRecord = useCallback((index: number) => {
+    setSelectedRecordIndex(index);
+    scrollToRecord(index);
+    setStatusText(`已选中第 ${index + 1} 条记录，扫描UDID将更新此记录`);
+  }, [scrollToRecord]);
+
+  const stopPropagation = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
 
   const fillTemplateFromRecord = useCallback((record: RecordItem) => {
     setTemplate({
@@ -632,11 +721,183 @@ function RouteComponent() {
 
   return (
     <div className="p-4 space-y-6">
+      {/* 记录列表移到最上方 */}
+      <section className="space-y-3" ref={recordsContainerRef}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="text-lg font-semibold">记录列表（CSV）</div>
+            {selectedRecordIndex !== null && (
+              <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                已选中第 {selectedRecordIndex + 1} 条记录
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1 rounded bg-blue-600 text-white"
+              onClick={handleExportCSV}
+            >
+              导出CSV
+            </button>
+            <button
+              className="px-3 py-1 rounded bg-gray-700 text-white"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              导入CSV
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImportCSVFile(f);
+                e.currentTarget.value = "";
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="overflow-auto border rounded max-h-96">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {CSV_HEADERS.concat(["操作"]).map((h) => (
+                  <th key={h} className="px-1 py-1 text-left border-b whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((r, idx) => (
+                <tr 
+                  key={r.storeCode} 
+                  className={`cursor-pointer transition-colors ${
+                    selectedRecordIndex === idx 
+                      ? "bg-blue-100 border-blue-300" 
+                      : "odd:bg-white even:bg-gray-50 hover:bg-gray-100"
+                  }`}
+                  onClick={() => selectRecord(idx)}
+                >
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.storeCode}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.udidRaw}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <a href={`https://udi.hemaoptical.com/devices-chinese?q=${r.udiDi}`} target="_blank" rel="noopener noreferrer">
+                      {r.udiDi}
+                    </a>
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <input className="w-40 border rounded px-2 py-1" value={r.productNameInput}
+                      onChange={(e) => onRecordChange(idx, "productNameInput", e.target.value)}
+                      onClick={stopPropagation} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.deviceGeneralName}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.modelSpec}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <input className="w-28 border rounded px-2 py-1" value={r.degree}
+                      onChange={(e) => onRecordChange(idx, "degree", e.target.value)}
+                      onClick={stopPropagation} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.productionDate}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.expiryDate}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.batchNumber}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.serialNumber}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.entryDate}
+                        onChange={(e) => onRecordChange(idx, "entryDate", e.target.value)} />
+                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "entryDate")}>今天</button>
+                    </div>
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrantName}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrationNo}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-16">1</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
+                    <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.purchaseUnitPrice}
+                      onChange={(e) => onRecordChange(idx, "purchaseUnitPrice", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.purchaseAmount.toFixed(2)}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
+                    <input className="w-40 border rounded px-2 py-1" value={r.supplierName}
+                      onChange={(e) => onRecordChange(idx, "supplierName", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-52">
+                    <input className="w-52 border rounded px-2 py-1" value={r.supplierAddress}
+                      onChange={(e) => onRecordChange(idx, "supplierAddress", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
+                    <input className="w-40 border rounded px-2 py-1" value={r.supplierContact}
+                      onChange={(e) => onRecordChange(idx, "supplierContact", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.purchaseDate}
+                        onChange={(e) => onRecordChange(idx, "purchaseDate", e.target.value)} />
+                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "purchaseDate")}>今天</button>
+                    </div>
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.acceptanceConclusion}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-32">
+                    <input className="w-32 border rounded px-2 py-1" value={r.acceptanceStaff}
+                      onChange={(e) => onRecordChange(idx, "acceptanceStaff", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.acceptanceDate}
+                        onChange={(e) => onRecordChange(idx, "acceptanceDate", e.target.value)} />
+                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "acceptanceDate")}>今天</button>
+                    </div>
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
+                    <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.salePrice}
+                      onChange={(e) => onRecordChange(idx, "salePrice", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.saleAmount.toFixed(2)}</td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.saleDate}
+                        onChange={(e) => onRecordChange(idx, "saleDate", e.target.value)} />
+                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "saleDate")}>今天</button>
+                    </div>
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-32">
+                    <input className="w-32 border rounded px-2 py-1" value={r.customerName}
+                      onChange={(e) => onRecordChange(idx, "customerName", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap w-32">
+                    <input className="w-32 border rounded px-2 py-1" value={r.customerPhone}
+                      onChange={(e) => onRecordChange(idx, "customerPhone", e.target.value)} />
+                  </td>
+                  <td className="px-1 py-1 border-b whitespace-nowrap">
+                    <div className="flex gap-1">
+                      <button className="text-blue-600 text-xs" onClick={() => fillTemplateFromRecord(r)}>复制</button>
+                      <button className="text-red-600 text-xs" onClick={() => removeRecord(idx)}>删除</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {records.length === 0 && (
+                <tr>
+                  <td className="px-1 py-3 text-center text-gray-500" colSpan={CSV_HEADERS.length + 1}>
+                    暂无记录，请先扫描店内码
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <div className="space-y-2">
         <div className="text-lg font-semibold">扫码录入</div>
         <div className="text-sm text-gray-600">
           先扫描店内码，再扫描UDID；两次连续UDID将覆盖当前记录；首次扫描为UDID则忽略。
         </div>
+        {selectedRecordIndex !== null && (
+          <div className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded border border-blue-200">
+            💡 当前已选中记录，扫描UDID时会将下方模板输入框的内容与网络数据合并更新到选中记录
+          </div>
+        )}
       </div>
 
       <ScanBox
@@ -749,143 +1010,6 @@ function RouteComponent() {
               onChange={(e) => onTemplateChange("salePrice", e.target.value)}
             />
           </div>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold">记录列表（CSV）</div>
-          <div className="flex items-center gap-2">
-            <button
-              className="px-3 py-1 rounded bg-blue-600 text-white"
-              onClick={handleExportCSV}
-            >
-              导出CSV
-            </button>
-            <button
-              className="px-3 py-1 rounded bg-gray-700 text-white"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              导入CSV
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleImportCSVFile(f);
-                e.currentTarget.value = "";
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="overflow-auto border rounded">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50">
-              <tr>
-                {CSV_HEADERS.concat(["操作"]).map((h) => (
-                  <th key={h} className="px-1 py-1 text-left border-b whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r, idx) => (
-                <tr key={r.storeCode} className="odd:bg-white even:bg-gray-50">
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.storeCode}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.udidRaw}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <a href={`https://udi.hemaoptical.com/devices-chinese?q=${r.udiDi}`} target="_blank" rel="noopener noreferrer">
-                      {r.udiDi}
-                    </a>
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <input className="w-40 border rounded px-2 py-1" value={r.productNameInput}
-                      onChange={(e) => onRecordChange(idx, "productNameInput", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.deviceGeneralName}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.modelSpec}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <input className="w-28 border rounded px-2 py-1" value={r.degree}
-                      onChange={(e) => onRecordChange(idx, "degree", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.productionDate}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.expiryDate}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.batchNumber}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.serialNumber}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.entryDate}
-                        onChange={(e) => onRecordChange(idx, "entryDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "entryDate")}>今天</button>
-                    </div>
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrantName}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.registrationNo}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-16">1</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
-                    <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.purchaseUnitPrice}
-                      onChange={(e) => onRecordChange(idx, "purchaseUnitPrice", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.purchaseAmount.toFixed(2)}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
-                    <input className="w-40 border rounded px-2 py-1" value={r.supplierName}
-                      onChange={(e) => onRecordChange(idx, "supplierName", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-52">
-                    <input className="w-52 border rounded px-2 py-1" value={r.supplierAddress}
-                      onChange={(e) => onRecordChange(idx, "supplierAddress", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-40">
-                    <input className="w-40 border rounded px-2 py-1" value={r.supplierContact}
-                      onChange={(e) => onRecordChange(idx, "supplierContact", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.purchaseDate}
-                        onChange={(e) => onRecordChange(idx, "purchaseDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "purchaseDate")}>今天</button>
-                    </div>
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.acceptanceConclusion}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-32">
-                    <input className="w-32 border rounded px-2 py-1" value={r.acceptanceStaff}
-                      onChange={(e) => onRecordChange(idx, "acceptanceStaff", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      <input type="date" className="w-36 border rounded px-2 py-1" value={r.acceptanceDate}
-                        onChange={(e) => onRecordChange(idx, "acceptanceDate", e.target.value)} />
-                      <button className="text-blue-600 text-xs" onClick={() => setTodayForRecord(idx, "acceptanceDate")}>今天</button>
-                    </div>
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap w-24">
-                    <input type="number" step="0.01" className="w-24 border rounded px-2 py-1" value={r.salePrice}
-                      onChange={(e) => onRecordChange(idx, "salePrice", e.target.value)} />
-                  </td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.saleAmount.toFixed(2)}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.saleDate}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.customerName}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">{r.customerPhone}</td>
-                  <td className="px-1 py-1 border-b whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      <button className="px-2 py-1 rounded bg-gray-600 text-white" onClick={() => fillTemplateFromRecord(r)}>填充模板</button>
-                      <button className="px-2 py-1 rounded bg-red-600 text-white" onClick={() => removeRecord(idx)}>删除</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {records.length === 0 && (
-                <tr>
-                  <td className="px-1 py-3 text-center text-gray-500" colSpan={CSV_HEADERS.length + 1}>
-                    暂无记录，请先扫描店内码
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </section>
     </div>
