@@ -11,6 +11,7 @@ type PromptOptions = {
   okText?: string;
   cancelText?: string;
   required?: boolean;          // 是否必填
+  showInput?: boolean;         // 是否显示输入框，默认true
 };
 type Resolver = (value: string | null) => void;
 
@@ -28,8 +29,10 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) queueMicrotask(() => inputRef.current?.focus());
-  }, [open]);
+    if (open && opts.showInput !== false) {
+      queueMicrotask(() => inputRef.current?.focus());
+    }
+  }, [open, opts.showInput]);
 
   const resolveAndClose = useCallback((v: string | null) => {
     resolverRef.current?.(v);
@@ -46,9 +49,13 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const onSubmit = useCallback(() => {
+    if (opts.showInput === false) {
+      resolveAndClose("ok");
+      return;
+    }
     if (opts.required && !value.trim()) return;
     resolveAndClose(value);
-  }, [opts.required, value, resolveAndClose]);
+  }, [opts.required, opts.showInput, value, resolveAndClose]);
 
   const ctx = useMemo(() => prompt, [prompt]);
 
@@ -64,28 +71,35 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
             )}
           </DialogHeader>
 
-          <div className="py-2">
-            <Input
-              ref={inputRef}
-              placeholder={opts.placeholder ?? "在此输入…"}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSubmit();
-                if (e.key === "Escape") resolveAndClose(null);
-              }}
-            />
-            {opts.required && !value.trim() && (
-              <p className="mt-2 text-xs text-destructive">该字段为必填</p>
-            )}
-          </div>
+          {opts.showInput !== false && (
+            <div className="py-2">
+              <Input
+                ref={inputRef}
+                placeholder={opts.placeholder ?? "在此输入…"}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onSubmit();
+                  if (e.key === "Escape") resolveAndClose(null);
+                }}
+              />
+              {opts.required && !value.trim() && (
+                <p className="mt-2 text-xs text-destructive">该字段为必填</p>
+              )}
+            </div>
+          )}
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => resolveAndClose(null)}>
-              {opts.cancelText ?? "取消"}
-            </Button>
-            <Button onClick={onSubmit} disabled={opts.required && !value.trim()}>
-              {opts.okText ?? "确定"}
+            {opts.showInput !== false && (
+              <Button variant="ghost" onClick={() => resolveAndClose(null)}>
+                {opts.cancelText ?? "取消"}
+              </Button>
+            )}
+            <Button 
+              onClick={onSubmit} 
+              disabled={opts.showInput !== false && opts.required && !value.trim()}
+            >
+              {opts.okText ?? (opts.showInput === false ? "确定" : "确定")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -27,7 +27,11 @@ import {
   StartHttpReq,
   StopHttpReq,
   TestPrintReq,
-  PrinterStatus
+  PrinterStatus,
+  ProductQueryConfig,
+  SetProductQueryConfigReq,
+  SelectCsvFileReq,
+  CheckCsvFileReq
 } from '@/common/ipc';
 
 // 调试信息：确认 preload 脚本正在执行
@@ -328,6 +332,51 @@ const api = {
       return invokeWithTimeout(IPC.printer.testPrint, { data, description } satisfies TestPrintReq);
     },
   },
+
+  // 产品查询配置 API
+  productQuery: {
+    /**
+     * 获取产品查询配置
+     */
+    async getConfig(): Promise<ApiResponse<ProductQueryConfig>> {
+      return invokeWithTimeout(IPC.productQuery.getConfig, {});
+    },
+
+    /**
+     * 设置产品查询配置
+     */
+    async setConfig(config: SetProductQueryConfigReq): Promise<ApiResponse<ProductQueryConfig>> {
+      return invokeWithTimeout(IPC.productQuery.setConfig, config);
+    },
+
+    /**
+     * 选择CSV文件
+     */
+    async selectCsvFile(): Promise<ApiResponse<string>> {
+      return invokeWithTimeout(IPC.productQuery.selectCsvFile, {} satisfies SelectCsvFileReq);
+    },
+
+    /**
+     * 检查CSV文件是否存在
+     */
+    async checkCsvFile(req: CheckCsvFileReq): Promise<ApiResponse<boolean>> {
+      return invokeWithTimeout(IPC.productQuery.checkCsvFile, req);
+    },
+
+    /**
+     * 重新选择CSV文件（清除旧权限）
+     */
+    async reselectCsvFile(oldFilePath?: string): Promise<ApiResponse<string>> {
+      return invokeWithTimeout(IPC.productQuery.reselectCsvFile, { oldFilePath });
+    },
+
+    /**
+     * 清除文件访问权限
+     */
+    async clearFileAccess(filePath: string): Promise<ApiResponse<{ success: boolean }>> {
+      return invokeWithTimeout(IPC.productQuery.clearFileAccess, { filePath });
+    },
+  },
 } as const;
 
 // 暴露安全的 API 到渲染进程
@@ -342,6 +391,7 @@ console.log('  - task:', Object.keys(api.task));
 console.log('  - window:', Object.keys(api.window));
 console.log('  - dev:', Object.keys(api.dev));
 console.log('  - printer:', Object.keys(api.printer));
+console.log('  - productQuery:', Object.keys(api.productQuery));
 
 // TypeScript 类型声明
 declare global {

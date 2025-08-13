@@ -41,6 +41,11 @@ function IndexComponent() {
           Prompt 组件测试
         </a>
       </div>
+      <div>
+        <a href="#/product-query" target="_blank">
+          产品查询
+        </a>
+      </div>
     </div>
   );
 }

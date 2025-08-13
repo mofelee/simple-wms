@@ -49,6 +49,15 @@ export const IPC = {
     testPrint: 'printer:testPrint',
     getStatus: 'printer:getStatus',
   },
+  // 产品查询配置
+  productQuery: {
+    getConfig: 'productQuery:getConfig',
+    setConfig: 'productQuery:setConfig',
+    selectCsvFile: 'productQuery:selectCsvFile',
+    checkCsvFile: 'productQuery:checkCsvFile',
+    reselectCsvFile: 'productQuery:reselectCsvFile',
+    clearFileAccess: 'productQuery:clearFileAccess',
+  },
 } as const;
 
 // 用户相关类型
@@ -201,6 +210,20 @@ export interface PrinterStatus {
   lastError?: string;
 }
 
+// 产品查询配置类型
+export interface ProductQueryConfig {
+  csvFilePath: string;
+  retailUnitName: string;
+  businessAddress: string;
+  phoneNumber: string;
+}
+
+export type SetProductQueryConfigReq = ProductQueryConfig;
+export interface SelectCsvFileReq {}
+export interface CheckCsvFileReq {
+  filePath: string;
+}
+
 // API 响应包装类型
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -241,7 +264,13 @@ export type IpcChannels =
   | typeof IPC.printer.startHttp
   | typeof IPC.printer.stopHttp
   | typeof IPC.printer.testPrint
-  | typeof IPC.printer.getStatus;
+  | typeof IPC.printer.getStatus
+  | typeof IPC.productQuery.getConfig
+  | typeof IPC.productQuery.setConfig
+  | typeof IPC.productQuery.selectCsvFile
+  | typeof IPC.productQuery.checkCsvFile
+  | typeof IPC.productQuery.reselectCsvFile
+  | typeof IPC.productQuery.clearFileAccess;
 
 // 工具类型：提取值类型
 export type ExtractChannelValue<T> = T extends Record<string, infer U> ? U : never;

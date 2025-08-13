@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as PromptTestRouteImport } from './routes/prompt-test'
+import { Route as ProductQueryRouteImport } from './routes/product-query'
 import { Route as PrinterRouteImport } from './routes/printer'
 import { Route as CsvscannerRouteImport } from './routes/csvscanner'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const TestRoute = TestRouteImport.update({
 const PromptTestRoute = PromptTestRouteImport.update({
   id: '/prompt-test',
   path: '/prompt-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductQueryRoute = ProductQueryRouteImport.update({
+  id: '/product-query',
+  path: '/product-query',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrinterRoute = PrinterRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
   '/printer': typeof PrinterRoute
+  '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
   '/printer': typeof PrinterRoute
+  '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
 }
@@ -60,21 +68,42 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/csvscanner': typeof CsvscannerRoute
   '/printer': typeof PrinterRoute
+  '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/csvscanner' | '/printer' | '/prompt-test' | '/test'
+  fullPaths:
+    | '/'
+    | '/csvscanner'
+    | '/printer'
+    | '/product-query'
+    | '/prompt-test'
+    | '/test'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/csvscanner' | '/printer' | '/prompt-test' | '/test'
-  id: '__root__' | '/' | '/csvscanner' | '/printer' | '/prompt-test' | '/test'
+  to:
+    | '/'
+    | '/csvscanner'
+    | '/printer'
+    | '/product-query'
+    | '/prompt-test'
+    | '/test'
+  id:
+    | '__root__'
+    | '/'
+    | '/csvscanner'
+    | '/printer'
+    | '/product-query'
+    | '/prompt-test'
+    | '/test'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CsvscannerRoute: typeof CsvscannerRoute
   PrinterRoute: typeof PrinterRoute
+  ProductQueryRoute: typeof ProductQueryRoute
   PromptTestRoute: typeof PromptTestRoute
   TestRoute: typeof TestRoute
 }
@@ -93,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/prompt-test'
       fullPath: '/prompt-test'
       preLoaderRoute: typeof PromptTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/product-query': {
+      id: '/product-query'
+      path: '/product-query'
+      fullPath: '/product-query'
+      preLoaderRoute: typeof ProductQueryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/printer': {
@@ -123,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CsvscannerRoute: CsvscannerRoute,
   PrinterRoute: PrinterRoute,
+  ProductQueryRoute: ProductQueryRoute,
   PromptTestRoute: PromptTestRoute,
   TestRoute: TestRoute,
 }
