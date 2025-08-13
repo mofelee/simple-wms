@@ -3,7 +3,7 @@ import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { ScanBox } from "@/components/ScanBox";
 import { usePrompt } from "@/components/ui/prompt";
 import { EscPosBuilder } from "@/lib/escpos";
-import { Eye, EyeOff, Printer, Settings, Save, FolderOpen, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, Printer, Settings, Save, FolderOpen, CheckCircle, X, Plus } from "lucide-react";
 
 type ProductRecord = {
   // 扫码相关
@@ -82,7 +82,7 @@ function RouteComponent() {
   const prompt = usePrompt();
   
   const [csvData, setCsvData] = useState<ProductRecord[]>([]);
-  const [currentProduct, setCurrentProduct] = useState<ProductRecord | null>(null);
+  const [scannedProducts, setScannedProducts] = useState<ProductRecord[]>([]);
   const [showCostPrices, setShowCostPrices] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>("请扫描店内编号查询产品");
   
@@ -263,13 +263,13 @@ function RouteComponent() {
         return;
       }
       
-      const header = rows[0];
+      const header = rows[0].map(h => h.trim());
       const dataRows = rows.slice(1);
       
       // 验证CSV格式
       const expectedHeaders = CSV_HEADERS;
       const hasValidFormat = expectedHeaders.every(h => header.includes(h));
-      
+
       if (!hasValidFormat) {
         setStatusText("CSV文件格式不匹配，请检查文件格式是否包含所需字段");
         setCsvData([]);
@@ -512,25 +512,54 @@ function RouteComponent() {
     const product = csvData.find(item => item.storeCode === storeCode);
     
     if (product) {
-      setCurrentProduct(product);
-      setStatusText(`找到产品：${product.deviceGeneralName || product.productNameInput}`);
+      // 检查是否已经扫描过这个产品
+      const existingIndex = scannedProducts.findIndex(p => p.storeCode === storeCode);
       
-      // 如果产品已有顾客信息，则填充到输入框（保持当前输入不被清空的逻辑）
-      if (product.customerName && !customerName) {
-        setCustomerName(product.customerName);
+      if (existingIndex >= 0) {
+        // 产品已存在，更新现有产品信息
+        const updatedProducts = [...scannedProducts];
+        updatedProducts[existingIndex] = { ...product };
+        setScannedProducts(updatedProducts);
+        setStatusText(`更新产品：${product.deviceGeneralName || product.productNameInput}`);
+      } else {
+        // 新产品，添加到列表
+        setScannedProducts(prev => [...prev, { ...product }]);
+        setStatusText(`添加产品：${product.deviceGeneralName || product.productNameInput} (共 ${scannedProducts.length + 1} 个产品)`);
       }
-      if (product.customerPhone && !customerPhone) {
-        setCustomerPhone(product.customerPhone);
+      
+      // 如果是第一次扫描且产品已有顾客信息，则填充到输入框
+      if (scannedProducts.length === 0 && !customerName && !customerPhone) {
+        if (product.customerName) {
+          setCustomerName(product.customerName);
+        }
+        if (product.customerPhone) {
+          setCustomerPhone(product.customerPhone);
+        }
       }
-      if (product.saleDate && product.saleDate !== saleDate) {
-        // 如果产品有销售日期且与当前不同，提示用户
-        setStatusText(`找到产品：${product.deviceGeneralName || product.productNameInput} (已于 ${product.saleDate} 销售)`);
-      }
+      
     } else {
-      setCurrentProduct(null);
       setStatusText(`未找到店内编号为 ${storeCode} 的产品`);
     }
-  }, [csvData, customerName, customerPhone, saleDate]);
+  }, [csvData, customerName, customerPhone, scannedProducts]);
+
+  // 删除已扫描的产品
+  const handleRemoveProduct = useCallback((storeCode: string) => {
+    setScannedProducts(prev => {
+      const filtered = prev.filter(p => p.storeCode !== storeCode);
+      if (filtered.length === 0) {
+        setStatusText("请扫描店内编号查询产品");
+      } else {
+        setStatusText(`已移除产品，剩余 ${filtered.length} 个产品`);
+      }
+      return filtered;
+    });
+  }, []);
+
+  // 清空所有已扫描的产品
+  const handleClearAllProducts = useCallback(() => {
+    setScannedProducts([]);
+    setStatusText("请扫描店内编号查询产品");
+  }, []);
 
   // 将数据转换为CSV格式
   const convertToCSV = useCallback((records: ProductRecord[]): string => {
@@ -584,7 +613,14 @@ function RouteComponent() {
 
   // 保存销售信息
   const handleSaveSale = useCallback(async () => {
-    if (!currentProduct) return;
+    if (scannedProducts.length === 0) {
+      await prompt({
+        title: "提示",
+        description: "请先扫描产品",
+        showInput: false,
+      });
+      return;
+    }
     
     if (!saleDate) {
       await prompt({
@@ -615,14 +651,6 @@ function RouteComponent() {
         return;
       }
 
-      const updatedProduct: ProductRecord = {
-        ...currentProduct,
-        saleDate,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        saleAmount: currentProduct.salePrice * currentProduct.quantity
-      };
-
       // 先检查文件写入权限
       try {
         const checkRes = await window.electronAPI.productQuery.checkCsvFile({ filePath: storeConfig.csvFilePath });
@@ -634,10 +662,23 @@ function RouteComponent() {
         throw new Error(`写入权限验证失败: ${errorMsg}`);
       }
 
+      // 批量更新所有扫描的产品
+      const updatedProducts = scannedProducts.map(product => ({
+        ...product,
+        saleDate,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        saleAmount: product.salePrice * product.quantity
+      }));
+
       // 更新CSV数据
-      const updatedCsvData = csvData.map(item => 
-        item.storeCode === currentProduct.storeCode ? updatedProduct : item
-      );
+      let updatedCsvData = [...csvData];
+      updatedProducts.forEach(updatedProduct => {
+        const index = updatedCsvData.findIndex(item => item.storeCode === updatedProduct.storeCode);
+        if (index >= 0) {
+          updatedCsvData[index] = updatedProduct;
+        }
+      });
       
       // 将更新的数据写入到实际的CSV文件
       const csvText = convertToCSV(updatedCsvData);
@@ -651,12 +692,12 @@ function RouteComponent() {
 
       // 更新界面状态
       setCsvData(updatedCsvData);
-      setCurrentProduct(updatedProduct);
-      setStatusText("销售信息已保存并更新到CSV文件");
+      setScannedProducts(updatedProducts);
+      setStatusText(`销售信息已保存并更新到CSV文件 (${updatedProducts.length} 个产品)`);
 
       await prompt({
         title: "成功",
-        description: "销售信息已保存到CSV文件",
+        description: `${updatedProducts.length} 个产品的销售信息已保存到CSV文件`,
         showInput: false,
       });
 
@@ -669,11 +710,18 @@ function RouteComponent() {
         showInput: false,
       });
     }
-  }, [currentProduct, customerName, customerPhone, saleDate, csvData, convertToCSV, storeConfig.csvFilePath, prompt]);
+  }, [scannedProducts, customerName, customerPhone, saleDate, csvData, convertToCSV, storeConfig.csvFilePath, prompt]);
 
   // 打印功能
   const handlePrint = useCallback(async () => {
-    if (!currentProduct) return;
+    if (scannedProducts.length === 0) {
+      await prompt({
+        title: "提示",
+        description: "请先扫描产品",
+        showInput: false,
+      });
+      return;
+    }
     
     if (!storeConfig.businessAddress || !storeConfig.phoneNumber) {
       await prompt({
@@ -684,12 +732,13 @@ function RouteComponent() {
       return;
     }
 
-    const validityPeriod = formatValidityPeriod(currentProduct.productionDate, currentProduct.expiryDate);
-    const amount = (currentProduct.salePrice * 1).toFixed(2);
-    
     const builder = new EscPosBuilder();
     
-    const receiptData = builder
+    // 计算总金额
+    const totalAmount = scannedProducts.reduce((sum, product) => sum + (product.salePrice * product.quantity), 0);
+    
+    // 构建打印数据
+    let receiptBuilder = builder
       .addText(storeConfig.retailUnitName || "零售店", { 
         align: 'center', 
         fontSize: 'double_height', 
@@ -699,38 +748,75 @@ function RouteComponent() {
       .addText("销售凭证", { align: 'center', fontSize: 'double_width', bold: true })
       .addLine()
       .addSeparator('-', 32)
-      .addText(`角膜接触镜名称：${currentProduct.deviceGeneralName}`, { align: 'left' })
+      .addText(`销售日期：${saleDate}`, { align: 'left' })
       .addLine()
-      .addText(`规格型号：${currentProduct.modelSpec}`, { align: 'left' })
+      .addSeparator('-', 32)
+      .addLine();
+
+    // 如果有客户信息，显示客户信息
+    // if (customerName.trim() || customerPhone.trim()) {
+    //   if (customerName.trim()) {
+    //     receiptBuilder.addText(`顾客姓名：${customerName}`, { align: 'left' }).addLine();
+    //   }
+    //   if (customerPhone.trim()) {
+    //     receiptBuilder.addText(`联系电话：${customerPhone}`, { align: 'left' }).addLine();
+    //   }
+    //   receiptBuilder.addSeparator('-', 32);
+    // }
+
+    // 添加每个产品的详细信息
+    scannedProducts.forEach((product, index) => {
+      const validityPeriod = formatValidityPeriod(product.productionDate, product.expiryDate);
+      const productAmount = (product.salePrice * product.quantity).toFixed(2);
+      
+      receiptBuilder
+        .addText(`产品 ${index + 1}:`, { align: 'left', bold: true })
+        .addLine()
+        .addText(`角膜接触镜名称：${product.deviceGeneralName}`, { align: 'left' })
+        .addLine()
+        .addText(`规格型号：${product.modelSpec}`, { align: 'left' })
+        .addLine()
+        .addText(`生产企业：${product.registrantName}`, { align: 'left' })
+        .addLine()
+        .addText(`注册证号：${product.registrationNo}`, { align: 'left' })
+        .addLine()
+        .addText(`数量：${product.quantity}`, { align: 'left' })
+        .addLine()
+        .addText(`单价：￥${product.salePrice.toFixed(2)}`, { align: 'left' })
+        .addLine()
+        .addText(`金额：￥${productAmount}`, { align: 'left', bold: true })
+        .addLine()
+        .addText(`批号：${product.batchNumber}`, { align: 'left' })
+        .addLine()
+        .addText(`序列号：${product.serialNumber}`, { align: 'left' })
+        .addLine()
+        .addText(`有效期：${validityPeriod}`, { align: 'left' })
+        .addLine();
+
+      // 如果不是最后一个产品，添加分隔线
+      if (index < scannedProducts.length - 1) {
+        receiptBuilder.addSeparator('.', 32);
+      }
+    });
+
+    // 添加总计和店铺信息
+    receiptBuilder
+      .addSeparator('=', 32)
+      .addText(`合计金额：￥${totalAmount.toFixed(2)}`, { align: 'center', fontSize: 'double_width', bold: true })
       .addLine()
-      .addText(`生产企业名称：${currentProduct.registrantName}`, { align: 'left' })
-      .addLine()
-      .addText(`注册证号：${currentProduct.registrationNo}`, { align: 'left' })
-      .addLine()
-      .addText(`数量：1`, { align: 'left' })
-      .addLine()
-      .addText(`单价：￥${currentProduct.salePrice.toFixed(2)}`, { align: 'left' })
-      .addLine()
-      .addText(`金额：￥${amount}`, { align: 'left', bold: true })
-      .addLine()
-      .addText(`批号：${currentProduct.batchNumber}`, { align: 'left' })
-      .addLine()
-      .addText(`序列号：${currentProduct.serialNumber}`, { align: 'left' })
-      .addLine()
-      .addText(`有效期：${validityPeriod}`, { align: 'left' })
+      .addText(`商品数量：${scannedProducts.length} 件`, { align: 'center' })
       .addLine()
       .addSeparator('-', 32)
       .addText(`经营地址：${storeConfig.businessAddress}`, { align: 'left' })
       .addLine()
       .addText(`电话：${storeConfig.phoneNumber}`, { align: 'left' })
       .addLine()
-      .addText(`销售日期：${saleDate}`, { align: 'left' })
-      .addLine()
       .addSeparator('-', 32)
       .addText("谢谢惠顾！", { align: 'center', bold: true })
       .addEmptyLine(6)
-      .cut()
-      .build();
+      .cut();
+
+    const receiptData = receiptBuilder.build();
 
     try {
       // 检查 Electron API 是否可用
@@ -744,14 +830,14 @@ function RouteComponent() {
       }
 
       // 使用打印机配置进行ESC/POS打印
-      const description = `销售凭证 - ${currentProduct.deviceGeneralName} - ￥${amount}`;
+      const description = `销售凭证 - ${scannedProducts.length}件商品 - ￥${totalAmount.toFixed(2)}`;
       const res = await window.electronAPI.printer.testPrint(receiptData, description);
       
       if (res.success) {
         setStatusText("打印成功！");
         await prompt({
           title: "成功",
-          description: "销售凭证已发送到打印机",
+          description: `销售凭证已发送到打印机\n${scannedProducts.length}件商品，合计￥${totalAmount.toFixed(2)}`,
           showInput: false,
         });
       } else {
@@ -766,7 +852,7 @@ function RouteComponent() {
         showInput: false,
       });
     }
-  }, [currentProduct, storeConfig, saleDate, prompt]);
+  }, [scannedProducts, storeConfig, saleDate, customerName, customerPhone, prompt]);
 
   // 初始化
   useEffect(() => {
@@ -838,208 +924,247 @@ function RouteComponent() {
         />
       </section>
 
-      {/* 产品信息显示 */}
-      {currentProduct && (
-        <section className={`space-y-4 border rounded-lg p-4 ${
-          currentProduct.saleDate ? 'bg-green-50 border-green-200' : 'bg-gray-50'
-        }`}>
+      {/* 已扫描产品列表 */}
+      {scannedProducts.length > 0 && (
+        <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">产品信息</h2>
-              {currentProduct.saleDate && (
-                <span className="px-2 py-1 text-xs bg-green-500 text-white rounded-full">
-                  已销售 ({currentProduct.saleDate})
-                </span>
-              )}
+            <h2 className="text-lg font-semibold">已扫描产品 ({scannedProducts.length})</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCostPrices(!showCostPrices)}
+                className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                {showCostPrices ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showCostPrices ? "隐藏成本" : "显示成本"}
+              </button>
+              <button
+                onClick={handleClearAllProducts}
+                className="flex items-center gap-2 px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                清空全部
+              </button>
             </div>
-            <button
-              onClick={() => setShowCostPrices(!showCostPrices)}
-              className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              {showCostPrices ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              {showCostPrices ? "隐藏成本" : "显示成本"}
-            </button>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <label className="text-gray-600">店内编号</label>
-              <div className="font-medium">{currentProduct.storeCode}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">UDID</label>
-              <div className="font-medium font-mono text-xs break-all">{currentProduct.udidRaw}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">UDI-DI</label>
-              <div>
-                {currentProduct.udiDi ? (
-                  <a 
-                    href={`https://udi.hemaoptical.com/devices-chinese?q=${currentProduct.udiDi}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline font-mono text-xs break-all"
+          {/* 产品列表 */}
+          <div className="space-y-4">
+            {scannedProducts.map((product, index) => (
+              <div
+                key={product.storeCode}
+                className={`border rounded-lg p-4 ${
+                  product.saleDate ? 'bg-green-50 border-green-200' : 'bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-semibold text-blue-600">#{index + 1}</span>
+                    <h3 className="text-md font-medium">{product.deviceGeneralName || product.productNameInput}</h3>
+                    {product.saleDate && (
+                      <span className="px-2 py-1 text-xs bg-green-500 text-white rounded-full">
+                        已销售 ({product.saleDate})
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveProduct(product.storeCode)}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                   >
-                    {currentProduct.udiDi}
-                  </a>
-                ) : (
-                  <span className="text-gray-400">未设置</span>
-                )}
+                    <X className="w-4 h-4" />
+                    移除
+                  </button>
+                </div>
+
+                {/* 产品详细信息 */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <label className="text-gray-600">店内编号</label>
+                    <div className="font-medium">{product.storeCode}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">UDID</label>
+                    <div className="font-medium font-mono text-xs break-all">{product.udidRaw}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">UDI-DI</label>
+                    <div>
+                      {product.udiDi ? (
+                        <a 
+                          href={`https://udi.hemaoptical.com/devices-chinese?q=${product.udiDi}`}
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline font-mono text-xs break-all"
+                        >
+                          {product.udiDi}
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">未设置</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">产品名称</label>
+                    <div className="font-medium">{product.productNameInput}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">医疗器械的名称</label>
+                    <div className="font-medium">{product.deviceGeneralName}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">型号规格</label>
+                    <div className="font-medium">{product.modelSpec}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">度数</label>
+                    <div className="font-medium">{product.degree}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">生产日期</label>
+                    <div className="font-medium">{product.productionDate}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">使用期限/失效日期</label>
+                    <div className="font-medium">{product.expiryDate}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">批号</label>
+                    <div className="font-medium">{product.batchNumber}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">序列号</label>
+                    <div className="font-medium">{product.serialNumber}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">入库日期</label>
+                    <div className="font-medium">{product.entryDate}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">注册/备案人名称</label>
+                    <div className="font-medium">{product.registrantName}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">注册/备案证号</label>
+                    <div className="font-medium">{product.registrationNo}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">数量</label>
+                    <div className="font-medium">{product.quantity}</div>
+                  </div>
+                  
+                  {/* 成本价格信息（可隐藏） */}
+                  {showCostPrices && (
+                    <>
+                      <div>
+                        <label className="text-gray-600">进货单价</label>
+                        <div className="font-medium text-red-600">¥{product.purchaseUnitPrice.toFixed(2)}</div>
+                      </div>
+                      
+                      <div>
+                        <label className="text-gray-600">进货金额</label>
+                        <div className="font-medium text-red-600">¥{product.purchaseAmount.toFixed(2)}</div>
+                      </div>
+                    </>
+                  )}
+                  
+                  <div>
+                    <label className="text-gray-600">供货者名称</label>
+                    <div className="font-medium">{product.supplierName}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">供货者地址</label>
+                    <div className="font-medium">{product.supplierAddress}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">供货者联系方式</label>
+                    <div className="font-medium">{product.supplierContact}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">购货日期</label>
+                    <div className="font-medium">{product.purchaseDate}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">验收结论</label>
+                    <div className="font-medium">{product.acceptanceConclusion}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">验收人员</label>
+                    <div className="font-medium">{product.acceptanceStaff}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">验收日期</label>
+                    <div className="font-medium">{product.acceptanceDate}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">销售价格</label>
+                    <div className="font-medium text-green-600">¥{product.salePrice.toFixed(2)}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">销售金额</label>
+                    <div className="font-medium text-green-600">¥{product.saleAmount.toFixed(2)}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">销售日期</label>
+                    <div className="font-medium">{product.saleDate || "未销售"}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">顾客姓名</label>
+                    <div className="font-medium">{product.customerName || "未填写"}</div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-gray-600">顾客联系电话</label>
+                    <div className="font-medium">{product.customerPhone || "未填写"}</div>
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">产品名称</label>
-              <div className="font-medium">{currentProduct.productNameInput}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">医疗器械的名称</label>
-              <div className="font-medium">{currentProduct.deviceGeneralName}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">型号规格</label>
-              <div className="font-medium">{currentProduct.modelSpec}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">度数</label>
-              <div className="font-medium">{currentProduct.degree}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">生产日期</label>
-              <div className="font-medium">{currentProduct.productionDate}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">使用期限/失效日期</label>
-              <div className="font-medium">{currentProduct.expiryDate}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">批号</label>
-              <div className="font-medium">{currentProduct.batchNumber}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">序列号</label>
-              <div className="font-medium">{currentProduct.serialNumber}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">入库日期</label>
-              <div className="font-medium">{currentProduct.entryDate}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">注册/备案人名称</label>
-              <div className="font-medium">{currentProduct.registrantName}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">注册/备案证号</label>
-              <div className="font-medium">{currentProduct.registrationNo}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">数量</label>
-              <div className="font-medium">{currentProduct.quantity}</div>
-            </div>
-            
-            {/* 成本价格信息（可隐藏） */}
-            {showCostPrices && (
-              <>
-                <div>
-                  <label className="text-gray-600">进货单价</label>
-                  <div className="font-medium text-red-600">¥{currentProduct.purchaseUnitPrice.toFixed(2)}</div>
-                </div>
-                
-                <div>
-                  <label className="text-gray-600">进货金额</label>
-                  <div className="font-medium text-red-600">¥{currentProduct.purchaseAmount.toFixed(2)}</div>
-                </div>
-              </>
-            )}
-            
-            <div>
-              <label className="text-gray-600">供货者名称</label>
-              <div className="font-medium">{currentProduct.supplierName}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">供货者地址</label>
-              <div className="font-medium">{currentProduct.supplierAddress}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">供货者联系方式</label>
-              <div className="font-medium">{currentProduct.supplierContact}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">购货日期</label>
-              <div className="font-medium">{currentProduct.purchaseDate}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">验收结论</label>
-              <div className="font-medium">{currentProduct.acceptanceConclusion}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">验收人员</label>
-              <div className="font-medium">{currentProduct.acceptanceStaff}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">验收日期</label>
-              <div className="font-medium">{currentProduct.acceptanceDate}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">销售价格</label>
-              <div className="font-medium text-green-600">¥{currentProduct.salePrice.toFixed(2)}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">销售金额</label>
-              <div className="font-medium text-green-600">¥{currentProduct.saleAmount.toFixed(2)}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">销售日期</label>
-              <div className="font-medium">{currentProduct.saleDate || "未销售"}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">顾客姓名</label>
-              <div className="font-medium">{currentProduct.customerName || "未填写"}</div>
-            </div>
-            
-            <div>
-              <label className="text-gray-600">顾客联系电话</label>
-              <div className="font-medium">{currentProduct.customerPhone || "未填写"}</div>
-            </div>
+            ))}
           </div>
         </section>
       )}
 
       {/* 销售信息输入 */}
-      {currentProduct && (
-        <section className={`space-y-4 border rounded-lg p-4 ${
-          currentProduct.saleDate ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50'
-        }`}>
+      {scannedProducts.length > 0 && (
+        <section className={`space-y-4 border rounded-lg p-4 bg-blue-50 border-blue-200`}>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">销售信息录入</h2>
-            {currentProduct.saleDate && (
-              <span className="text-sm text-yellow-700 bg-yellow-100 px-2 py-1 rounded">
-                此产品已销售，可重新录入
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                {scannedProducts.length} 个产品
               </span>
-            )}
+              {scannedProducts.some(p => p.saleDate) && (
+                <span className="text-sm text-yellow-700 bg-yellow-100 px-2 py-1 rounded">
+                  包含已销售产品
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="text-sm text-gray-600">
+            此信息将应用到所有已扫描的产品。总金额：¥{scannedProducts.reduce((sum, p) => sum + p.salePrice * p.quantity, 0).toFixed(2)}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
