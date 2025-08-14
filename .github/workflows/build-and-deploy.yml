@@ -51,12 +51,14 @@ jobs:
         find out -type f -name "*.exe" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.zip" 2>/dev/null | head -20 || echo "No build outputs found"
       shell: bash
     
-    - name: Setup ossutil (all platforms)
-      uses: manyuanrong/setup-ossutil@v2.0
-      with:
-        endpoint: oss-${{ env.ALIYUN_OSS_REGION }}.aliyuncs.com
-        access-key-id: ${{ env.ALIYUN_ACCESS_KEY_ID }}
-        access-key-secret: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
+    - name: Setup ossutil2 (all platforms)
+      uses: rogerogers/setup-ossutil2@v1.0.0
+      env:
+        OSS_ACCESS_KEY_ID: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+        OSS_ACCESS_KEY_SECRET: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
+        OSS_REGION: ${{ env.ALIYUN_OSS_REGION }}
+        # 使用地域外网 Endpoint，便于管理操作；应用下载仍走加速域名
+        OSS_ENDPOINT: ${{ env.ALIYUN_OSS_ENDPOINT }}
       
     # ossutil is configured by the action above
       
