@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, Menu } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers, unregisterIpcHandlers } from '@/main/ipc/handlers';
@@ -17,6 +17,7 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -24,6 +25,12 @@ const createWindow = () => {
       sandbox: false,
     },
   });
+
+  // 隐藏 Windows 菜单栏（File/Edit/View/Window/Help）
+  if (process.platform === 'win32') {
+    Menu.setApplicationMenu(null);
+    mainWindow.setMenuBarVisibility(false);
+  }
 
   // 配置新窗口打开处理器
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
