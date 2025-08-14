@@ -23,15 +23,15 @@ export class UpdaterService {
   }
 
   private initializeUpdater() {
-    // 配置更新服务器URL
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: 'https://simple-wms.oss-accelerate.aliyuncs.com',
-    });
-
+    // electron-updater 会自动读取 app-update.yml 配置文件
+    // 该文件已包含在应用的 resources 目录中
+    
     // 配置更新选项
     autoUpdater.autoDownload = false; // 手动控制下载
     autoUpdater.autoInstallOnAppQuit = true;
+    
+    // 设置更新检查的详细日志
+    autoUpdater.logger = console;
   }
 
   private setupEventListeners() {

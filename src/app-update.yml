@@ -1,0 +1,4 @@
+provider: generic
+url: https://simple-wms.oss-accelerate.aliyuncs.com
+channel: latest
+updaterCacheDirName: simple-wms-updater

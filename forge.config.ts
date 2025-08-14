@@ -15,6 +15,9 @@ const config: ForgeConfig = {
     appBundleId: 'com.mofelee.simple-wms',
     appCopyright: '© 2025 Mofe Lee',
     executableName: 'simple-wms',
+    extraResource: [
+      'src/app-update.yml'
+    ],
   },
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],
