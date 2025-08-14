@@ -42,12 +42,7 @@ jobs:
         
     - name: Get version from package.json
       id: get_version
-      run: |
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-        else
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-        fi
+      run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
       shell: bash
       
     - name: List build outputs (Debug)
@@ -58,16 +53,28 @@ jobs:
         
     - name: Install Aliyun OSS CLI
       run: |
+        set -euo pipefail
         if [ "${{ runner.os }}" = "macOS" ]; then
-          curl -o ossutil64 https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-mac
+          curl -fsSL -o ossutil64 -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-mac
+          if head -c 5 ossutil64 | grep -q "<\\?xml\|<html"; then
+            echo "Downloaded file looks like HTML/XML (likely error page)." >&2; exit 1
+          fi
           chmod +x ossutil64
           sudo mv ossutil64 /usr/local/bin/ossutil
+          /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil validation failed" >&2; exit 1; }
         elif [ "${{ runner.os }}" = "Linux" ]; then
-          curl -o ossutil64 https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-linux
+          curl -fsSL -o ossutil64 -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-linux
+          if head -c 5 ossutil64 | grep -q "<\\?xml\|<html"; then
+            echo "Downloaded file looks like HTML/XML (likely error page)." >&2; exit 1
+          fi
           chmod +x ossutil64
           sudo mv ossutil64 /usr/local/bin/ossutil
+          /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil validation failed" >&2; exit 1; }
         else
-          curl -o ossutil64.exe https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64.exe
+          curl -fsSL -o ossutil64.exe -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64.exe
+          if head -c 5 ossutil64.exe | grep -q "<\\?xml\|<html"; then
+            Write-Host "Downloaded file looks like HTML/XML (likely error page)."; exit 1
+          fi
           mkdir -p "$HOME/bin"
           mv ossutil64.exe "$HOME/bin/ossutil.exe"
           echo "$HOME/bin" >> $GITHUB_PATH
@@ -86,24 +93,64 @@ jobs:
     - name: Upload to OSS - macOS
       if: runner.os == 'macOS'
       run: |
-        # 查找并上传 macOS 构建产物
-        for file in $(find out -name "*.dmg" -o -name "*-darwin-*.zip" 2>/dev/null || true); do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            echo "Uploading macOS file: $file -> $filename"
-            ossutil cp "$file" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
-          fi
-        done
+        set -euo pipefail
+        echo "Resolving macOS artifact..."
+        ZIP_FILE=$(find out -type f -name "*-darwin-*.zip" -print -quit || true)
+        if [ -z "$ZIP_FILE" ]; then
+          echo "No zip found, trying dmg..."
+          ZIP_FILE=$(find out -type f -name "*.dmg" -print -quit || true)
+        fi
+        if [ -z "$ZIP_FILE" ]; then
+          echo "No macOS artifact found" >&2
+          exit 1
+        fi
+        filename=$(basename "$ZIP_FILE")
+        echo "Artifact: $ZIP_FILE"
+
+        SHA512=$(openssl dgst -sha512 -binary "$ZIP_FILE" | base64)
+        SIZE=$(stat -f%z "$ZIP_FILE")
+
+        ossutil cp "$ZIP_FILE" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
+        ossutil cp "$ZIP_FILE" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
+
+        cat > latest-mac.yml << EOF
+        version: ${{ steps.get_version.outputs.version }}
+        releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
+        files:
+          - url: $filename
+            sha512: $SHA512
+            size: $SIZE
+        path: $filename
+        sha512: $SHA512
+        releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
+        EOF
+
+        ossutil cp latest-mac.yml "oss://${{ env.ALIYUN_OSS_BUCKET }}/latest-mac.yml" --force
       shell: bash
       
     - name: Upload to OSS - Windows  
       if: runner.os == 'Windows'
       run: |
-        # 查找并上传 Windows 构建产物
+        # 上传安装包
         Get-ChildItem -Recurse out -Include "*.exe","*-win32-*.zip" | ForEach-Object {
           $filename = $_.Name
-          Write-Host "Uploading Windows file: $($_.FullName) -> $filename"
+          Write-Host "Uploading Windows installer: $($_.FullName) -> $filename"
           & ossutil.exe cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
+        }
+
+        # 上传用于Squirrel.Windows自动更新的文件到根目录
+        $releases = Get-ChildItem -Recurse out -Filter RELEASES | Select-Object -First 1
+        if ($null -ne $releases) {
+          Write-Host "Uploading RELEASES: $($releases.FullName)"
+          & ossutil.exe cp "$($releases.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/RELEASES" --force
+        } else {
+          Write-Host "RELEASES not found"
+        }
+
+        Get-ChildItem -Recurse out -Include "*.nupkg" | ForEach-Object {
+          $filename = $_.Name
+          Write-Host "Uploading nupkg: $($_.FullName) -> $filename"
+          & ossutil.exe cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
         }
       shell: pwsh
       
@@ -111,7 +158,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         # 查找并上传 Linux 构建产物
-        for file in $(find out -name "*.deb" -o -name "*.rpm" -o -name "*-linux-*.zip" 2>/dev/null || true); do
+        for file in $(find out -type f -name "*.deb" -o -name "*.rpm" -o -name "*-linux-*.zip" 2>/dev/null || true); do
           if [ -f "$file" ]; then
             filename=$(basename "$file")
             echo "Uploading Linux file: $file -> $filename"
@@ -120,75 +167,4 @@ jobs:
         done
       shell: bash
 
-  create-update-manifest:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Get version from package.json
-      id: get_version
-      run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
-    - name: Install Aliyun OSS CLI
-      run: |
-        curl -o ossutil64 https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-linux
-        chmod +x ossutil64
-        sudo mv ossutil64 /usr/local/bin/ossutil
-        
-    - name: Configure Aliyun OSS
-      run: |
-        ossutil config -e ${{ env.ALIYUN_OSS_ENDPOINT }} -i ${{ env.ALIYUN_ACCESS_KEY_ID }} -k ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
-        
-    - name: Create update manifest
-      run: |
-        # 创建更新清单文件
-        cat > latest.yml << EOF
-        version: ${{ steps.get_version.outputs.version }}
-        releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-        files:
-          - url: https://${{ env.ALIYUN_OSS_BUCKET }}.${{ env.ALIYUN_OSS_ENDPOINT }}/${{ steps.get_version.outputs.version }}/
-            sha512: ""
-            size: 0
-        path: ${{ steps.get_version.outputs.version }}/
-        sha512: ""
-        releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
-        EOF
-        
-        # 创建平台特定的更新清单
-        
-        # macOS
-        cat > latest-mac.yml << EOF
-        version: ${{ steps.get_version.outputs.version }}
-        releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-        files:
-          - url: simple-wms-${{ steps.get_version.outputs.version }}-darwin-x64.zip
-            sha512: ""
-            size: 0
-        path: simple-wms-${{ steps.get_version.outputs.version }}-darwin-x64.zip
-        sha512: ""
-        releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
-        EOF
-        
-        # Windows
-        cat > latest.exe.yml << EOF
-        version: ${{ steps.get_version.outputs.version }}
-        releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-        files:
-          - url: simple-wms Setup ${{ steps.get_version.outputs.version }}.exe
-            sha512: ""
-            size: 0
-        path: simple-wms Setup ${{ steps.get_version.outputs.version }}.exe
-        sha512: ""
-        releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
-        EOF
-        
-    - name: Upload update manifests to OSS
-      run: |
-        ossutil cp latest.yml "oss://${{ env.ALIYUN_OSS_BUCKET }}/latest.yml" --force
-        ossutil cp latest-mac.yml "oss://${{ env.ALIYUN_OSS_BUCKET }}/latest-mac.yml" --force  
-        ossutil cp latest.exe.yml "oss://${{ env.ALIYUN_OSS_BUCKET }}/latest.exe.yml" --force
-        
-        echo "Update manifests uploaded successfully!"
-        echo "Latest version: ${{ steps.get_version.outputs.version }}"
+  # Centralized manifest creation job removed; manifests are created per-platform in build job
