@@ -55,6 +55,7 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         set -euo pipefail
+        VERSION="${{ steps.get_version.outputs.version }}"
         ZIP_FILE=$(find out -type f -name "*-darwin-*.zip" -print -quit || true)
         if [ -z "$ZIP_FILE" ]; then
           ZIP_FILE=$(find out -type f -name "*.dmg" -print -quit || true)
@@ -67,7 +68,7 @@ jobs:
         SHA512=$(openssl dgst -sha512 -binary "$ZIP_FILE" | base64)
         SIZE=$(stat -f%z "$ZIP_FILE")
         cat > latest-mac.yml << EOF
-        version: ${{ steps.get_version.outputs.version }}
+        version: $VERSION
         releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
         files:
           - url: $filename
@@ -75,8 +76,10 @@ jobs:
             size: $SIZE
         path: $filename
         sha512: $SHA512
-        releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
+        releaseNotes: "Version $VERSION"
         EOF
+        echo "Generated latest-mac.yml for version $VERSION:"
+        cat latest-mac.yml
       shell: bash
 
     - name: Upload to OSS - macOS (tvrcgo/oss-action)
@@ -88,8 +91,8 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*-darwin-*.zip:/${{ steps.get_version.outputs.version }}/
-          out/**/*.dmg:/${{ steps.get_version.outputs.version }}/
+          out/**/*-darwin-*.zip:/
+          out/**/*.dmg:/
           latest-mac.yml:/latest-mac.yml
       
     - name: Upload to OSS - Windows (tvrcgo/oss-action)
@@ -101,8 +104,8 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*.exe:/${{ steps.get_version.outputs.version }}/
-          out/**/*-win32-*.zip:/${{ steps.get_version.outputs.version }}/
+          out/**/*.exe:/
+          out/**/*-win32-*.zip:/
           out/**/RELEASES:/RELEASES
           out/**/*.nupkg:/
       
@@ -115,8 +118,8 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*-linux-*.zip:/${{ steps.get_version.outputs.version }}/
-          out/**/*.deb:/${{ steps.get_version.outputs.version }}/
-          out/**/*.rpm:/${{ steps.get_version.outputs.version }}/
+          out/**/*-linux-*.zip:/
+          out/**/*.deb:/
+          out/**/*.rpm:/
 
   # Centralized manifest creation job removed; manifests are created per-platform in build job
