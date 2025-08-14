@@ -74,7 +74,7 @@ jobs:
         fi
         
         filename=$(basename "$ZIP_FILE")
-        echo "Found macOS artifact: $ZIP_FILE -> $filename"
+        echo "Found macOS artifact: $ZIP_FILE -> ${filename}"
         
         # 移动文件到上传目录
         mv "$ZIP_FILE" "upload/$filename"
@@ -96,7 +96,7 @@ jobs:
         releaseNotes: "Version $VERSION"
         EOF
         
-        echo "Generated latest-mac.yml for version $VERSION:"
+        echo "Generated latest-mac.yml for version ${VERSION}:"
         cat upload/latest-mac.yml
         echo "Files in upload directory:"
         ls -la upload/
@@ -128,13 +128,13 @@ jobs:
           exit 1
         }
         $filename = $EXE_FILE.Name
-        Write-Host "Found Windows executable: $($EXE_FILE.FullName) -> $filename"
+        Write-Host "Found Windows executable: $($EXE_FILE.FullName) -> ${filename}"
         Move-Item $EXE_FILE.FullName "upload\$filename"
         
         # 移动其他 Windows 文件
         Get-ChildItem -Recurse out -Include "*-win32-*.zip" | ForEach-Object {
           $zipname = $_.Name
-          Write-Host "Moving Windows zip: $($_.FullName) -> $zipname"
+          Write-Host "Moving Windows zip: $($_.FullName) -> ${zipname}"
           Move-Item $_.FullName "upload\$zipname"
         }
         
@@ -147,7 +147,7 @@ jobs:
         
         Get-ChildItem -Recurse out -Include "*.nupkg" | ForEach-Object {
           $nupkgname = $_.Name
-          Write-Host "Moving nupkg: $($_.FullName) -> $nupkgname"
+          Write-Host "Moving nupkg: $($_.FullName) -> ${nupkgname}"
           Move-Item $_.FullName "upload\$nupkgname"
         }
         
@@ -169,7 +169,7 @@ jobs:
         releaseNotes: "Version $VERSION"
         "@ | Out-File -FilePath upload\latest.yml -Encoding UTF8
         
-        Write-Host "Generated latest.yml for version $VERSION:"
+        Write-Host "Generated latest.yml for version ${VERSION}:"
         Get-Content upload\latest.yml
         Write-Host "Files in upload directory:"
         Get-ChildItem upload
@@ -213,7 +213,7 @@ jobs:
         fi
         
         filename=$(basename "$LINUX_FILE")
-        echo "Found Linux artifact: $LINUX_FILE -> $filename"
+        echo "Found Linux artifact: $LINUX_FILE -> ${filename}"
         
         # 移动主文件到上传目录
         mv "$LINUX_FILE" "upload/$filename"
@@ -222,7 +222,7 @@ jobs:
         find out -type f \( -name "*-linux-*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read -r file; do
           if [ "$file" != "$LINUX_FILE" ]; then
             fname=$(basename "$file")
-            echo "Moving additional Linux file: $file -> $fname"
+            echo "Moving additional Linux file: $file -> ${fname}"
             mv "$file" "upload/$fname"
           fi
         done
@@ -247,7 +247,7 @@ jobs:
         # 也生成通用的 latest.yml (如果 Windows 构建失败时的备用)
         cp upload/latest-linux.yml upload/latest.yml
         
-        echo "Generated latest-linux.yml and latest.yml for version $VERSION:"
+        echo "Generated latest-linux.yml and latest.yml for version ${VERSION}:"
         cat upload/latest-linux.yml
         echo "Files in upload directory:"
         ls -la upload/
