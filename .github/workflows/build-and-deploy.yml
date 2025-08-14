@@ -51,35 +51,60 @@ jobs:
         find out -type f -name "*.exe" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.zip" 2>/dev/null | head -20 || echo "No build outputs found"
       shell: bash
         
-    - name: Install Aliyun OSS CLI
+    # Install Aliyun OSS CLI v2 (per official doc: https://help.aliyun.com/zh/oss/developer-reference/install-ossutil2)
+    - name: Install Aliyun OSS CLI (macOS)
+      if: runner.os == 'macOS'
       run: |
         set -euo pipefail
-        if [ "${{ runner.os }}" = "macOS" ]; then
-          curl -fsSL -o ossutil64 -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-mac
-          if head -c 5 ossutil64 | grep -q "<\\?xml\|<html"; then
-            echo "Downloaded file looks like HTML/XML (likely error page)." >&2; exit 1
-          fi
-          chmod +x ossutil64
-          sudo mv ossutil64 /usr/local/bin/ossutil
-          /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil validation failed" >&2; exit 1; }
-        elif [ "${{ runner.os }}" = "Linux" ]; then
-          curl -fsSL -o ossutil64 -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64-linux
-          if head -c 5 ossutil64 | grep -q "<\\?xml\|<html"; then
-            echo "Downloaded file looks like HTML/XML (likely error page)." >&2; exit 1
-          fi
-          chmod +x ossutil64
-          sudo mv ossutil64 /usr/local/bin/ossutil
-          /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil validation failed" >&2; exit 1; }
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "arm64" ]; then
+          URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-arm64.zip"
+          DIR="ossutil-2.1.2-mac-arm64"
         else
-          curl -fsSL -o ossutil64.exe -L https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil64.exe
-          if head -c 5 ossutil64.exe | grep -q "<\\?xml\|<html"; then
-            Write-Host "Downloaded file looks like HTML/XML (likely error page)."; exit 1
-          fi
-          mkdir -p "$HOME/bin"
-          mv ossutil64.exe "$HOME/bin/ossutil.exe"
-          echo "$HOME/bin" >> $GITHUB_PATH
+          URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-amd64.zip"
+          DIR="ossutil-2.1.2-mac-amd64"
         fi
+        curl -fsSL -o ossutil.zip -L "$URL"
+        unzip -q ossutil.zip
+        sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
+        sudo chmod +x /usr/local/bin/ossutil
+        /usr/local/bin/ossutil help >/dev/null 2>&1
       shell: bash
+
+    - name: Install Aliyun OSS CLI (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        set -euo pipefail
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip"; DIR="ossutil-2.1.2-linux-amd64";;
+          aarch64) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm64.zip"; DIR="ossutil-2.1.2-linux-arm64";;
+          armv7l) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm.zip"; DIR="ossutil-2.1.2-linux-arm";;
+          i386|i686) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-386.zip"; DIR="ossutil-2.1.2-linux-386";;
+          *) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip"; DIR="ossutil-2.1.2-linux-amd64";;
+        esac
+        curl -fsSL -o ossutil.zip -L "$URL"
+        unzip -q ossutil.zip
+        sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
+        sudo chmod +x /usr/local/bin/ossutil
+        /usr/local/bin/ossutil help >/dev/null 2>&1
+      shell: bash
+
+    - name: Install Aliyun OSS CLI (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        $url = "https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-windows-amd64.zip"
+        $zip = "$env:RUNNER_TEMP\ossutil.zip"
+        $dst = "$env:RUNNER_TEMP\ossutil"
+        Invoke-WebRequest -Uri $url -OutFile $zip
+        Expand-Archive -Path $zip -DestinationPath $dst -Force
+        $exe = Join-Path $dst "ossutil.exe"
+        if (!(Test-Path $exe)) { throw "ossutil.exe not found after extraction" }
+        New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
+        Copy-Item $exe "$HOME\bin\ossutil.exe" -Force
+        "$HOME\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+        & "$HOME\bin\ossutil.exe" help | Out-Null
+      shell: pwsh
       
     - name: Configure Aliyun OSS
       run: |
