@@ -86,7 +86,7 @@ jobs:
         ls -la "$DIR"
         sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
         sudo chmod +x /usr/local/bin/ossutil
-        /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil help failed" >&2; /usr/local/bin/ossutil; exit 1; }
+        /usr/local/bin/ossutil version >/dev/null 2>&1 || { echo "ossutil version failed" >&2; /usr/local/bin/ossutil version || /usr/local/bin/ossutil; exit 1; }
       shell: bash
 
     - name: Install Aliyun OSS CLI (Linux)
@@ -124,7 +124,7 @@ jobs:
         ls -la "$DIR"
         sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
         sudo chmod +x /usr/local/bin/ossutil
-        /usr/local/bin/ossutil help >/dev/null 2>&1 || { echo "ossutil help failed" >&2; /usr/local/bin/ossutil; exit 1; }
+        /usr/local/bin/ossutil version >/dev/null 2>&1 || { echo "ossutil version failed" >&2; /usr/local/bin/ossutil version || /usr/local/bin/ossutil; exit 1; }
       shell: bash
 
     - name: Install Aliyun OSS CLI (Windows)
@@ -145,7 +145,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
         Copy-Item $exe "$HOME\bin\ossutil.exe" -Force
         "$HOME\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-        & "$HOME\bin\ossutil.exe" help | Out-Null
+        & "$HOME\bin\ossutil.exe" version | Out-Null
       shell: pwsh
       
     - name: Configure Aliyun OSS
