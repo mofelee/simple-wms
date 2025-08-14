@@ -50,112 +50,15 @@ jobs:
         echo "Listing out directory contents:"
         find out -type f -name "*.exe" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.zip" 2>/dev/null | head -20 || echo "No build outputs found"
       shell: bash
-        
-    # Install Aliyun OSS CLI v2 (per official doc: https://help.aliyun.com/zh/oss/developer-reference/install-ossutil2)
-    - name: Install Aliyun OSS CLI (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        set -euxo pipefail
-        ARCH=$(uname -m)
-        if [ "$ARCH" = "arm64" ]; then
-          URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-arm64.zip"
-          DIR="ossutil-2.1.2-mac-arm64"
-          EXPECTED_SHA256="8de04983ec17c8d1ce7ddfd99e031b7ad69fe385d57d9957f4a10f93f2da73af"
-        else
-          URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-mac-amd64.zip"
-          DIR="ossutil-2.1.2-mac-amd64"
-          EXPECTED_SHA256="20e685892bcc0b8a3731082409471735641f5359fc55c46890ec882f5441fec8"
-        fi
-        echo "Downloading: $URL"
-        curl -fsSL --retry 5 --retry-all-errors -D headers.txt -o ossutil.zip -L "$URL" || { echo "curl failed"; cat headers.txt || true; exit 1; }
-        ls -l ossutil.zip
-        file ossutil.zip || true
-        # SHA256 verify
-        ACTUAL_SHA256=$(shasum -a 256 ossutil.zip | awk '{print $1}')
-        echo "Expected SHA256: $EXPECTED_SHA256"
-        echo "Actual   SHA256: $ACTUAL_SHA256"
-        if [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
-          echo "SHA256 mismatch for ossutil.zip" >&2
-          head -c 200 headers.txt || true
-          head -c 256 ossutil.zip | hexdump -C || true
-          exit 1
-        fi
-        unzip -l ossutil.zip || { echo "zip list failed"; head -c 256 ossutil.zip | hexdump -C; exit 1; }
-        unzip -q ossutil.zip
-        ls -la
-        ls -la "$DIR"
-        sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
-        sudo chmod +x /usr/local/bin/ossutil
-        /usr/local/bin/ossutil version >/dev/null 2>&1 || { echo "ossutil version failed" >&2; /usr/local/bin/ossutil version || /usr/local/bin/ossutil; exit 1; }
-      shell: bash
-
-    - name: Install Aliyun OSS CLI (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        set -euxo pipefail
-        ARCH=$(uname -m)
-        case "$ARCH" in
-          x86_64) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip"; DIR="ossutil-2.1.2-linux-amd64"; EXPECTED_SHA256="133bf2dc824b221710f4ff34fdc82b4b8b1b557cf79f2b684ea9e1af4161acaf";;
-          aarch64) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm64.zip"; DIR="ossutil-2.1.2-linux-arm64"; EXPECTED_SHA256="7b0fc62939f6d0a6efb9f8e1d07a8fa4fc45817827628a4624d3b467a7bac5a1";;
-          armv7l) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-arm.zip"; DIR="ossutil-2.1.2-linux-arm"; EXPECTED_SHA256="fddac6d5dcaa8eecde8afa365d73ae5a5538c51b7a3854d79be251483acb2f86";;
-          i386|i686) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-386.zip"; DIR="ossutil-2.1.2-linux-386"; EXPECTED_SHA256="3002f1334e65eb3b2b6f31feccc35cb9142c114e276c23371157432a20665201";;
-          *) URL="https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-linux-amd64.zip"; DIR="ossutil-2.1.2-linux-amd64"; EXPECTED_SHA256="133bf2dc824b221710f4ff34fdc82b4b8b1b557cf79f2b684ea9e1af4161acaf";;
-        esac
-        echo "Downloading: $URL"
-        curl -fsSL --retry 5 --retry-all-errors -D headers.txt -o ossutil.zip -L "$URL" || { echo "curl failed"; cat headers.txt || true; exit 1; }
-        ls -l ossutil.zip
-        file ossutil.zip || true
-        if command -v shasum >/dev/null 2>&1; then
-          ACTUAL_SHA256=$(shasum -a 256 ossutil.zip | awk '{print $1}')
-        else
-          ACTUAL_SHA256=$(sha256sum ossutil.zip | awk '{print $1}')
-        fi
-        echo "Expected SHA256: $EXPECTED_SHA256"
-        echo "Actual   SHA256: $ACTUAL_SHA256"
-        if [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
-          echo "SHA256 mismatch for ossutil.zip" >&2
-          head -c 200 headers.txt || true
-          head -c 256 ossutil.zip | hexdump -C || true
-          exit 1
-        fi
-        unzip -l ossutil.zip || { echo "zip list failed"; head -c 256 ossutil.zip | hexdump -C; exit 1; }
-        unzip -q ossutil.zip
-        ls -la
-        ls -la "$DIR"
-        sudo mv "$DIR/ossutil" /usr/local/bin/ossutil
-        sudo chmod +x /usr/local/bin/ossutil
-        /usr/local/bin/ossutil version >/dev/null 2>&1 || { echo "ossutil version failed" >&2; /usr/local/bin/ossutil version || /usr/local/bin/ossutil; exit 1; }
-      shell: bash
-
-    - name: Install Aliyun OSS CLI (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        $url = "https://gosspublic.alicdn.com/ossutil/v2/2.1.2/ossutil-2.1.2-windows-amd64.zip"
-        $zip = "$env:RUNNER_TEMP\ossutil.zip"
-        $dst = "$env:RUNNER_TEMP\ossutil"
-        Invoke-WebRequest -Uri $url -OutFile $zip
-        $expected = "ea4bf1e8451b6e3d557f968bd77ff26586c95f5f6061fa560cadaff388a775f3"
-        $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-        Write-Host "Expected SHA256: $expected"
-        Write-Host "Actual   SHA256: $actual"
-        if ($expected -ne $actual) { Write-Error "SHA256 mismatch for ossutil.zip"; exit 1 }
-        Expand-Archive -Path $zip -DestinationPath $dst -Force
-        $exe = Join-Path $dst "ossutil.exe"
-        if (!(Test-Path $exe)) { throw "ossutil.exe not found after extraction" }
-        New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
-        Copy-Item $exe "$HOME\bin\ossutil.exe" -Force
-        "$HOME\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-        & "$HOME\bin\ossutil.exe" version | Out-Null
-      shell: pwsh
+    
+    - name: Setup ossutil (all platforms)
+      uses: manyuanrong/setup-ossutil@v2.0
+      with:
+        endpoint: oss-${{ env.ALIYUN_OSS_REGION }}.aliyuncs.com
+        access-key-id: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+        access-key-secret: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
       
-    - name: Configure Aliyun OSS
-      run: |
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          ossutil.exe config -e ${{ env.ALIYUN_OSS_ENDPOINT }} -i ${{ env.ALIYUN_ACCESS_KEY_ID }} -k ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
-        else
-          ossutil config -e ${{ env.ALIYUN_OSS_ENDPOINT }} -i ${{ env.ALIYUN_ACCESS_KEY_ID }} -k ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
-        fi
-      shell: bash
+    # ossutil is configured by the action above
       
     - name: Upload to OSS - macOS
       if: runner.os == 'macOS'
@@ -202,14 +105,14 @@ jobs:
         Get-ChildItem -Recurse out -Include "*.exe","*-win32-*.zip" | ForEach-Object {
           $filename = $_.Name
           Write-Host "Uploading Windows installer: $($_.FullName) -> $filename"
-          & ossutil.exe cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
+          ossutil cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
         }
 
         # 上传用于Squirrel.Windows自动更新的文件到根目录
         $releases = Get-ChildItem -Recurse out -Filter RELEASES | Select-Object -First 1
         if ($null -ne $releases) {
           Write-Host "Uploading RELEASES: $($releases.FullName)"
-          & ossutil.exe cp "$($releases.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/RELEASES" --force
+          ossutil cp "$($releases.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/RELEASES" --force
         } else {
           Write-Host "RELEASES not found"
         }
@@ -217,7 +120,7 @@ jobs:
         Get-ChildItem -Recurse out -Include "*.nupkg" | ForEach-Object {
           $filename = $_.Name
           Write-Host "Uploading nupkg: $($_.FullName) -> $filename"
-          & ossutil.exe cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
+          ossutil cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
         }
       shell: pwsh
       
