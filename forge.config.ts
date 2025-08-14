@@ -16,7 +16,6 @@ const config: ForgeConfig = {
     appCopyright: '© 2025 Mofe Lee',
     executableName: 'simple-wms',
   },
-  // 发布配置暂时移除，使用GitHub Action处理发布
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],
   plugins: [

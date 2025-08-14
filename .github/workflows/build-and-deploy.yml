@@ -54,11 +54,16 @@ jobs:
         find out -type f -name "*.exe" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.zip" 2>/dev/null | head -20 || echo "No build outputs found"
       shell: bash
     
-    - name: Prepare macOS manifest (latest-mac.yml)
+    - name: Prepare macOS files and manifest
       if: runner.os == 'macOS'
       run: |
         set -euo pipefail
         VERSION="${{ steps.get_version.outputs.version }}"
+        
+        # 创建上传目录
+        mkdir -p upload
+        
+        # 查找 macOS 构建文件
         ZIP_FILE=$(find out -type f -name "*-darwin-*.zip" -print -quit || true)
         if [ -z "$ZIP_FILE" ]; then
           ZIP_FILE=$(find out -type f -name "*.dmg" -print -quit || true)
@@ -67,22 +72,34 @@ jobs:
           echo "No macOS artifact found" >&2
           exit 1
         fi
+        
         filename=$(basename "$ZIP_FILE")
-        SHA512=$(openssl dgst -sha512 -binary "$ZIP_FILE" | base64)
-        SIZE=$(stat -f%z "$ZIP_FILE")
-        cat > latest-mac.yml << EOF
+        echo "Found macOS artifact: $ZIP_FILE -> $filename"
+        
+        # 移动文件到上传目录
+        mv "$ZIP_FILE" "upload/$filename"
+        
+        # 计算文件信息
+        SHA512=$(openssl dgst -sha512 -binary "upload/$filename" | base64)
+        SIZE=$(stat -f%z "upload/$filename")
+        
+        # 生成 manifest 文件
+        cat > upload/latest-mac.yml << EOF
         version: $VERSION
         releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
         files:
-          - url: $filename
+          - url: https://simple-wms.oss-accelerate.aliyuncs.com/$filename
             sha512: $SHA512
             size: $SIZE
         path: $filename
         sha512: $SHA512
         releaseNotes: "Version $VERSION"
         EOF
+        
         echo "Generated latest-mac.yml for version $VERSION:"
-        cat latest-mac.yml
+        cat upload/latest-mac.yml
+        echo "Files in upload directory:"
+        ls -la upload/
       shell: bash
 
     - name: Upload to OSS - macOS (tvrcgo/oss-action)
@@ -94,10 +111,70 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*-darwin-*.zip:/
-          out/**/*.dmg:/
-          latest-mac.yml:/latest-mac.yml
+          upload/*:/
       
+    - name: Prepare Windows files and manifest
+      if: runner.os == 'Windows'
+      run: |
+        $VERSION = "${{ steps.get_version.outputs.version }}"
+        
+        # 创建上传目录
+        New-Item -ItemType Directory -Force -Path upload | Out-Null
+        
+        # 查找并移动 Windows 构建文件
+        $EXE_FILE = Get-ChildItem -Recurse out -Include "*.exe" | Select-Object -First 1
+        if ($null -eq $EXE_FILE) {
+          Write-Error "No Windows executable found"
+          exit 1
+        }
+        $filename = $EXE_FILE.Name
+        Write-Host "Found Windows executable: $($EXE_FILE.FullName) -> $filename"
+        Move-Item $EXE_FILE.FullName "upload\$filename"
+        
+        # 移动其他 Windows 文件
+        Get-ChildItem -Recurse out -Include "*-win32-*.zip" | ForEach-Object {
+          $zipname = $_.Name
+          Write-Host "Moving Windows zip: $($_.FullName) -> $zipname"
+          Move-Item $_.FullName "upload\$zipname"
+        }
+        
+        # 移动 Squirrel.Windows 文件
+        $RELEASES = Get-ChildItem -Recurse out -Filter RELEASES | Select-Object -First 1
+        if ($null -ne $RELEASES) {
+          Write-Host "Moving RELEASES file: $($RELEASES.FullName)"
+          Move-Item $RELEASES.FullName "upload\RELEASES"
+        }
+        
+        Get-ChildItem -Recurse out -Include "*.nupkg" | ForEach-Object {
+          $nupkgname = $_.Name
+          Write-Host "Moving nupkg: $($_.FullName) -> $nupkgname"
+          Move-Item $_.FullName "upload\$nupkgname"
+        }
+        
+        # 计算主执行文件的信息
+        $SHA512 = (Get-FileHash -Algorithm SHA512 "upload\$filename").Hash.ToLower()
+        $SIZE = (Get-Item "upload\$filename").Length
+        $releaseDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+        
+        # 生成 manifest 文件
+        @"
+        version: $VERSION
+        releaseDate: $releaseDate
+        files:
+          - url: https://simple-wms.oss-accelerate.aliyuncs.com/$filename
+            sha512: $SHA512
+            size: $SIZE
+        path: $filename
+        sha512: $SHA512
+        releaseNotes: "Version $VERSION"
+        "@ | Out-File -FilePath upload\latest.yml -Encoding UTF8
+        
+        Write-Host "Generated latest.yml for version $VERSION:"
+        Get-Content upload\latest.yml
+        Write-Host "Files in upload directory:"
+        Get-ChildItem upload
+      shell: pwsh
+
     - name: Upload to OSS - Windows (tvrcgo/oss-action)
       if: runner.os == 'Windows'
       uses: tvrcgo/oss-action@master
@@ -107,11 +184,75 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*.exe:/
-          out/**/*-win32-*.zip:/
-          out/**/RELEASES:/RELEASES
-          out/**/*.nupkg:/
+          upload/*:/
       
+    - name: Prepare Linux files and manifest
+      if: runner.os == 'Linux'
+      run: |
+        set -euo pipefail
+        VERSION="${{ steps.get_version.outputs.version }}"
+        
+        # 创建上传目录
+        mkdir -p upload
+        
+        # 查找并移动 Linux 构建文件
+        # 优先查找 AppImage，然后是 deb，最后是 rpm
+        LINUX_FILE=$(find out -type f -name "*.AppImage" -print -quit || true)
+        if [ -z "$LINUX_FILE" ]; then
+          LINUX_FILE=$(find out -type f -name "*.deb" -print -quit || true)
+        fi
+        if [ -z "$LINUX_FILE" ]; then
+          LINUX_FILE=$(find out -type f -name "*.rpm" -print -quit || true)
+        fi
+        if [ -z "$LINUX_FILE" ]; then
+          LINUX_FILE=$(find out -type f -name "*-linux-*.zip" -print -quit || true)
+        fi
+        if [ -z "$LINUX_FILE" ]; then
+          echo "No Linux artifact found" >&2
+          exit 1
+        fi
+        
+        filename=$(basename "$LINUX_FILE")
+        echo "Found Linux artifact: $LINUX_FILE -> $filename"
+        
+        # 移动主文件到上传目录
+        mv "$LINUX_FILE" "upload/$filename"
+        
+        # 移动其他 Linux 文件
+        find out -type f \( -name "*-linux-*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) | while read -r file; do
+          if [ "$file" != "$LINUX_FILE" ]; then
+            fname=$(basename "$file")
+            echo "Moving additional Linux file: $file -> $fname"
+            mv "$file" "upload/$fname"
+          fi
+        done
+        
+        # 计算文件信息
+        SHA512=$(sha512sum "upload/$filename" | awk '{print $1}')
+        SIZE=$(stat -c%s "upload/$filename")
+        
+        # 生成 latest-linux.yml (平台特定)
+        cat > upload/latest-linux.yml << EOF
+        version: $VERSION
+        releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
+        files:
+          - url: https://simple-wms.oss-accelerate.aliyuncs.com/$filename
+            sha512: $SHA512
+            size: $SIZE
+        path: $filename
+        sha512: $SHA512
+        releaseNotes: "Version $VERSION"
+        EOF
+        
+        # 也生成通用的 latest.yml (如果 Windows 构建失败时的备用)
+        cp upload/latest-linux.yml upload/latest.yml
+        
+        echo "Generated latest-linux.yml and latest.yml for version $VERSION:"
+        cat upload/latest-linux.yml
+        echo "Files in upload directory:"
+        ls -la upload/
+      shell: bash
+
     - name: Upload to OSS - Linux (tvrcgo/oss-action)
       if: runner.os == 'Linux'
       uses: tvrcgo/oss-action@master
@@ -121,8 +262,6 @@ jobs:
         endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
         bucket: ${{ env.ALIYUN_OSS_BUCKET }}
         assets: |
-          out/**/*-linux-*.zip:/
-          out/**/*.deb:/
-          out/**/*.rpm:/
+          upload/*:/
 
   # Centralized manifest creation job removed; manifests are created per-platform in build job
