@@ -19,7 +19,7 @@ export default defineConfig(async () => {
     build: {
       rollupOptions: {
         external: [
-          'electron-updater'
+          // electron-updater 需要被打包，不应该标记为 external
         ],
       },
     },
