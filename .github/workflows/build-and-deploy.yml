@@ -51,25 +51,12 @@ jobs:
         find out -type f -name "*.exe" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.zip" 2>/dev/null | head -20 || echo "No build outputs found"
       shell: bash
     
-    - name: Setup ossutil2 (all platforms)
-      uses: rogerogers/setup-ossutil2@v1.0.0
-      env:
-        OSS_ACCESS_KEY_ID: ${{ env.ALIYUN_ACCESS_KEY_ID }}
-        OSS_ACCESS_KEY_SECRET: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
-        OSS_REGION: ${{ env.ALIYUN_OSS_REGION }}
-        # 使用地域外网 Endpoint，便于管理操作；应用下载仍走加速域名
-        OSS_ENDPOINT: ${{ env.ALIYUN_OSS_ENDPOINT }}
-      
-    # ossutil is configured by the action above
-      
-    - name: Upload to OSS - macOS
+    - name: Prepare macOS manifest (latest-mac.yml)
       if: runner.os == 'macOS'
       run: |
         set -euo pipefail
-        echo "Resolving macOS artifact..."
         ZIP_FILE=$(find out -type f -name "*-darwin-*.zip" -print -quit || true)
         if [ -z "$ZIP_FILE" ]; then
-          echo "No zip found, trying dmg..."
           ZIP_FILE=$(find out -type f -name "*.dmg" -print -quit || true)
         fi
         if [ -z "$ZIP_FILE" ]; then
@@ -77,14 +64,8 @@ jobs:
           exit 1
         fi
         filename=$(basename "$ZIP_FILE")
-        echo "Artifact: $ZIP_FILE"
-
         SHA512=$(openssl dgst -sha512 -binary "$ZIP_FILE" | base64)
         SIZE=$(stat -f%z "$ZIP_FILE")
-
-        ossutil cp "$ZIP_FILE" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
-        ossutil cp "$ZIP_FILE" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
-
         cat > latest-mac.yml << EOF
         version: ${{ steps.get_version.outputs.version }}
         releaseDate: $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
@@ -96,47 +77,46 @@ jobs:
         sha512: $SHA512
         releaseNotes: "Version ${{ steps.get_version.outputs.version }}"
         EOF
-
-        ossutil cp latest-mac.yml "oss://${{ env.ALIYUN_OSS_BUCKET }}/latest-mac.yml" --force
       shell: bash
+
+    - name: Upload to OSS - macOS (tvrcgo/oss-action)
+      if: runner.os == 'macOS'
+      uses: tvrcgo/oss-action@master
+      with:
+        key-id: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+        key-secret: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
+        endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
+        bucket: ${{ env.ALIYUN_OSS_BUCKET }}
+        assets: |
+          out/**/*-darwin-*.zip:/${{ steps.get_version.outputs.version }}/
+          out/**/*.dmg:/${{ steps.get_version.outputs.version }}/
+          latest-mac.yml:/latest-mac.yml
       
-    - name: Upload to OSS - Windows  
+    - name: Upload to OSS - Windows (tvrcgo/oss-action)
       if: runner.os == 'Windows'
-      run: |
-        # 上传安装包
-        Get-ChildItem -Recurse out -Include "*.exe","*-win32-*.zip" | ForEach-Object {
-          $filename = $_.Name
-          Write-Host "Uploading Windows installer: $($_.FullName) -> $filename"
-          ossutil cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
-        }
-
-        # 上传用于Squirrel.Windows自动更新的文件到根目录
-        $releases = Get-ChildItem -Recurse out -Filter RELEASES | Select-Object -First 1
-        if ($null -ne $releases) {
-          Write-Host "Uploading RELEASES: $($releases.FullName)"
-          ossutil cp "$($releases.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/RELEASES" --force
-        } else {
-          Write-Host "RELEASES not found"
-        }
-
-        Get-ChildItem -Recurse out -Include "*.nupkg" | ForEach-Object {
-          $filename = $_.Name
-          Write-Host "Uploading nupkg: $($_.FullName) -> $filename"
-          ossutil cp "$($_.FullName)" "oss://${{ env.ALIYUN_OSS_BUCKET }}/$filename" --force
-        }
-      shell: pwsh
+      uses: tvrcgo/oss-action@master
+      with:
+        key-id: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+        key-secret: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
+        endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
+        bucket: ${{ env.ALIYUN_OSS_BUCKET }}
+        assets: |
+          out/**/*.exe:/${{ steps.get_version.outputs.version }}/
+          out/**/*-win32-*.zip:/${{ steps.get_version.outputs.version }}/
+          out/**/RELEASES:/RELEASES
+          out/**/*.nupkg:/
       
-    - name: Upload to OSS - Linux
+    - name: Upload to OSS - Linux (tvrcgo/oss-action)
       if: runner.os == 'Linux'
-      run: |
-        # 查找并上传 Linux 构建产物
-        for file in $(find out -type f -name "*.deb" -o -name "*.rpm" -o -name "*-linux-*.zip" 2>/dev/null || true); do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            echo "Uploading Linux file: $file -> $filename"
-            ossutil cp "$file" "oss://${{ env.ALIYUN_OSS_BUCKET }}/${{ steps.get_version.outputs.version }}/$filename" --force
-          fi
-        done
-      shell: bash
+      uses: tvrcgo/oss-action@master
+      with:
+        key-id: ${{ env.ALIYUN_ACCESS_KEY_ID }}
+        key-secret: ${{ env.ALIYUN_ACCESS_KEY_SECRET }}
+        endpoint: ${{ env.ALIYUN_OSS_ENDPOINT }}
+        bucket: ${{ env.ALIYUN_OSS_BUCKET }}
+        assets: |
+          out/**/*-linux-*.zip:/${{ steps.get_version.outputs.version }}/
+          out/**/*.deb:/${{ steps.get_version.outputs.version }}/
+          out/**/*.rpm:/${{ steps.get_version.outputs.version }}/
 
   # Centralized manifest creation job removed; manifests are created per-platform in build job
