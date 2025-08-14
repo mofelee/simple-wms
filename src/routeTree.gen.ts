@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdaterRouteImport } from './routes/updater'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as PromptTestRouteImport } from './routes/prompt-test'
 import { Route as ProductQueryRouteImport } from './routes/product-query'
@@ -16,6 +17,11 @@ import { Route as PrinterRouteImport } from './routes/printer'
 import { Route as CsvscannerRouteImport } from './routes/csvscanner'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UpdaterRoute = UpdaterRouteImport.update({
+  id: '/updater',
+  path: '/updater',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestRoute = TestRouteImport.update({
   id: '/test',
   path: '/test',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
+  '/updater': typeof UpdaterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
+  '/updater': typeof UpdaterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/product-query': typeof ProductQueryRoute
   '/prompt-test': typeof PromptTestRoute
   '/test': typeof TestRoute
+  '/updater': typeof UpdaterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/product-query'
     | '/prompt-test'
     | '/test'
+    | '/updater'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/product-query'
     | '/prompt-test'
     | '/test'
+    | '/updater'
   id:
     | '__root__'
     | '/'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '/product-query'
     | '/prompt-test'
     | '/test'
+    | '/updater'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,10 +118,18 @@ export interface RootRouteChildren {
   ProductQueryRoute: typeof ProductQueryRoute
   PromptTestRoute: typeof PromptTestRoute
   TestRoute: typeof TestRoute
+  UpdaterRoute: typeof UpdaterRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/updater': {
+      id: '/updater'
+      path: '/updater'
+      fullPath: '/updater'
+      preLoaderRoute: typeof UpdaterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/test': {
       id: '/test'
       path: '/test'
@@ -162,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductQueryRoute: ProductQueryRoute,
   PromptTestRoute: PromptTestRoute,
   TestRoute: TestRoute,
+  UpdaterRoute: UpdaterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

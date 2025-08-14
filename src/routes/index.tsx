@@ -46,6 +46,11 @@ function IndexComponent() {
           产品查询
         </a>
       </div>
+      <div>
+        <a href="#/updater" target="_blank">
+          自动更新
+        </a>
+      </div>
     </div>
   );
 }

@@ -16,5 +16,12 @@ export default defineConfig(async () => {
         "@/routes": path.resolve(__dirname, "src/routes"),
       },
     },
+    build: {
+      rollupOptions: {
+        external: [
+          'electron-updater'
+        ],
+      },
+    },
   };
 });

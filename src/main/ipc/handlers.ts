@@ -29,7 +29,13 @@ import {
   ProductQueryConfig,
   SetProductQueryConfigReq,
   SelectCsvFileReq,
-  CheckCsvFileReq
+  CheckCsvFileReq,
+  CheckForUpdatesReq,
+  DownloadUpdateReq,
+  QuitAndInstallReq,
+  UpdateInfo,
+  UpdateProgressData,
+  UpdateError
 } from '@/common/ipc';
 
 import { userService } from '@/main/services/user';
@@ -38,6 +44,7 @@ import { systemService } from '@/main/services/system';
 import { taskService } from '@/main/services/task';
 import { windowService } from '@/main/services/window';
 import { printerService } from '@/main/services/printer';
+import { updaterService } from '@/main/services/updater';
 
 // Zod 验证 schemas
 const GetUserByIdSchema = z.object({
@@ -866,6 +873,30 @@ export function registerIpcHandlers(): void {
     IPC.productQuery.clearFileAccess,
     safeHandler(z.object({ filePath: z.string().min(1) }), async (req: { filePath: string }) => {
       await productQueryService.clearFileAccess(req.filePath);
+      return { success: true };
+    })
+  );
+
+  // 自动更新处理器
+  ipcMain.handle(
+    IPC.updater.checkForUpdates,
+    safeHandler(z.object({}), async () => {
+      return await updaterService.manualCheckForUpdates();
+    })
+  );
+
+  ipcMain.handle(
+    IPC.updater.downloadUpdate,
+    safeHandler(z.object({}), async () => {
+      await updaterService.downloadUpdate();
+      return { success: true };
+    })
+  );
+
+  ipcMain.handle(
+    IPC.updater.quitAndInstall,
+    safeHandler(z.object({}), async () => {
+      updaterService.quitAndInstall();
       return { success: true };
     })
   );

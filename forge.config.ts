@@ -7,10 +7,15 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    appBundleId: 'com.mofelee.simple-wms',
+    appCopyright: '© 2025 Mofe Lee',
+    executableName: 'simple-wms',
   },
+  // 发布配置暂时移除，使用GitHub Action处理发布
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],
   plugins: [

@@ -58,6 +58,17 @@ export const IPC = {
     reselectCsvFile: 'productQuery:reselectCsvFile',
     clearFileAccess: 'productQuery:clearFileAccess',
   },
+  // 自动更新
+  updater: {
+    checkForUpdates: 'updater:checkForUpdates',
+    downloadUpdate: 'updater:downloadUpdate',
+    quitAndInstall: 'updater:quitAndInstall',
+    onUpdateAvailable: 'updater:onUpdateAvailable',
+    onUpdateDownloaded: 'updater:onUpdateDownloaded',
+    onDownloadProgress: 'updater:onDownloadProgress',
+    onUpdateError: 'updater:onUpdateError',
+    onUpdateNotAvailable: 'updater:onUpdateNotAvailable',
+  },
 } as const;
 
 // 用户相关类型
@@ -224,6 +235,31 @@ export interface CheckCsvFileReq {
   filePath: string;
 }
 
+// 自动更新相关类型
+export interface UpdateInfo {
+  version: string;
+  releaseDate?: string;
+  releaseNotes?: string;
+  releaseName?: string;
+  releaseNotesFile?: string;
+}
+
+export interface UpdateProgressData {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
+}
+
+export interface UpdateError {
+  message: string;
+  stack?: string;
+}
+
+export interface CheckForUpdatesReq {}
+export interface DownloadUpdateReq {}
+export interface QuitAndInstallReq {}
+
 // API 响应包装类型
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -270,7 +306,15 @@ export type IpcChannels =
   | typeof IPC.productQuery.selectCsvFile
   | typeof IPC.productQuery.checkCsvFile
   | typeof IPC.productQuery.reselectCsvFile
-  | typeof IPC.productQuery.clearFileAccess;
+  | typeof IPC.productQuery.clearFileAccess
+  | typeof IPC.updater.checkForUpdates
+  | typeof IPC.updater.downloadUpdate
+  | typeof IPC.updater.quitAndInstall
+  | typeof IPC.updater.onUpdateAvailable
+  | typeof IPC.updater.onUpdateDownloaded
+  | typeof IPC.updater.onDownloadProgress
+  | typeof IPC.updater.onUpdateError
+  | typeof IPC.updater.onUpdateNotAvailable;
 
 // 工具类型：提取值类型
 export type ExtractChannelValue<T> = T extends Record<string, infer U> ? U : never;

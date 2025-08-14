@@ -31,7 +31,13 @@ import {
   ProductQueryConfig,
   SetProductQueryConfigReq,
   SelectCsvFileReq,
-  CheckCsvFileReq
+  CheckCsvFileReq,
+  CheckForUpdatesReq,
+  DownloadUpdateReq,
+  QuitAndInstallReq,
+  UpdateInfo,
+  UpdateProgressData,
+  UpdateError
 } from '@/common/ipc';
 
 // 调试信息：确认 preload 脚本正在执行
@@ -377,6 +383,74 @@ const api = {
       return invokeWithTimeout(IPC.productQuery.clearFileAccess, { filePath });
     },
   },
+
+  // 自动更新 API
+  updater: {
+    /**
+     * 检查更新
+     */
+    async checkForUpdates(): Promise<ApiResponse<any>> {
+      return invokeWithTimeout(IPC.updater.checkForUpdates, {} satisfies CheckForUpdatesReq);
+    },
+
+    /**
+     * 下载更新
+     */
+    async downloadUpdate(): Promise<ApiResponse<{ success: boolean }>> {
+      return invokeWithTimeout(IPC.updater.downloadUpdate, {} satisfies DownloadUpdateReq);
+    },
+
+    /**
+     * 退出并安装更新
+     */
+    async quitAndInstall(): Promise<ApiResponse<{ success: boolean }>> {
+      return invokeWithTimeout(IPC.updater.quitAndInstall, {} satisfies QuitAndInstallReq);
+    },
+
+    /**
+     * 监听更新可用事件
+     */
+    onUpdateAvailable(callback: (info: UpdateInfo) => void): () => void {
+      return createEventListener(IPC.updater.onUpdateAvailable, callback);
+    },
+
+    /**
+     * 监听更新下载完成事件
+     */
+    onUpdateDownloaded(callback: (info: UpdateInfo) => void): () => void {
+      return createEventListener(IPC.updater.onUpdateDownloaded, callback);
+    },
+
+    /**
+     * 监听下载进度事件
+     */
+    onDownloadProgress(callback: (progress: UpdateProgressData) => void): () => void {
+      return createEventListener(IPC.updater.onDownloadProgress, callback);
+    },
+
+    /**
+     * 监听更新错误事件
+     */
+    onUpdateError(callback: (error: UpdateError) => void): () => void {
+      return createEventListener(IPC.updater.onUpdateError, callback);
+    },
+
+    /**
+     * 监听无更新事件
+     */
+    onUpdateNotAvailable(callback: (info: UpdateInfo) => void): () => void {
+      return createEventListener(IPC.updater.onUpdateNotAvailable, callback);
+    },
+  },
+
+  // 通用事件监听器
+  on<T>(channel: string, callback: (data: T) => void): () => void {
+    return createEventListener(channel, callback);
+  },
+
+  off(channel: string, callback: (data: any) => void): void {
+    ipcRenderer.removeListener(channel, callback);
+  },
 } as const;
 
 // 暴露安全的 API 到渲染进程
@@ -392,6 +466,8 @@ console.log('  - window:', Object.keys(api.window));
 console.log('  - dev:', Object.keys(api.dev));
 console.log('  - printer:', Object.keys(api.printer));
 console.log('  - productQuery:', Object.keys(api.productQuery));
+console.log('  - updater:', Object.keys(api.updater));
+console.log('  - on, off: Event management');
 
 // TypeScript 类型声明
 declare global {

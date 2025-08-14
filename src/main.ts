@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, Menu } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers, unregisterIpcHandlers } from '@/main/ipc/handlers';
+import { updaterService } from '@/main/services/updater';
 
 // Vite dev server variables
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
@@ -78,8 +79,13 @@ const createWindow = () => {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
 
+  // 设置更新服务的主窗口引用
+  updaterService.setMainWindow(mainWindow);
+
   // Open the DevTools.
   //mainWindow.webContents.openDevTools();
+  
+  return mainWindow;
 };
 
 // This method will be called when Electron has finished
@@ -99,7 +105,18 @@ app.on('ready', () => {
   
   // Register IPC handlers before creating window
   registerIpcHandlers();
-  createWindow();
+  const mainWindow = createWindow();
+  
+  // 在生产环境中启动更新检查（5秒延迟，让应用先完全加载）
+  if (app.isPackaged) {
+    setTimeout(() => {
+      updaterService.checkForUpdates().catch((error) => {
+        console.error('启动时检查更新失败:', error);
+      });
+    }, 5000);
+  } else {
+    console.log('开发环境，跳过更新检查');
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
