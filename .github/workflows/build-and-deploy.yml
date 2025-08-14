@@ -11,7 +11,7 @@ env:
   ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
   ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
   ALIYUN_OSS_BUCKET: simple-wms
-  ALIYUN_OSS_REGION: oss-accelerate
+  ALIYUN_OSS_REGION: cn-shanghai
   ALIYUN_OSS_ENDPOINT: oss-accelerate.aliyuncs.com
 
 jobs:
