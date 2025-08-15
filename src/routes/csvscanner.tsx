@@ -59,6 +59,7 @@ type TemplateForm = {
   acceptanceStaff: string;
   acceptanceDate: string;
   salePrice: string; // string 输入，内部转换为 number
+  skipDegreeInfo: boolean; // 跳过度数信息获取
 };
 
 const CSV_HEADERS: string[] = [
@@ -171,6 +172,7 @@ function RouteComponent() {
     acceptanceStaff: "",
     acceptanceDate: "",
     salePrice: "",
+    skipDegreeInfo: false,
   });
 
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -437,7 +439,7 @@ function RouteComponent() {
         const modelSpec = info["规格型号"] || "";
         const registrantName = info["注册/备案人名称"] || "";
         const registrationNo = info["注册/备案证号"] || "";
-        const degreeFromApi = await parseDegreeFromApi(info, customDegreePrompt);
+        const degreeFromApi = template.skipDegreeInfo ? "" : await parseDegreeFromApi(info, customDegreePrompt);
 
         updateRecordAt(index, (r) => {
           const quantity = r.quantity || 1;
@@ -485,7 +487,7 @@ function RouteComponent() {
           modelSpec = info["规格型号"] || "";
           registrantName = info["注册/备案人名称"] || "";
           registrationNo = info["注册/备案证号"] || "";
-          degreeFromApi = await parseDegreeFromApi(info, customDegreePrompt);
+          degreeFromApi = template.skipDegreeInfo ? "" : await parseDegreeFromApi(info, customDegreePrompt);
           // 度数解析已在 parseDegreeFromApi 中处理，包括弹窗输入
         }
       }
@@ -712,7 +714,7 @@ function RouteComponent() {
     updateRecordAt(index, (r) => ({ ...r, [key]: todayStr } as RecordItem));
   }, [todayStr, updateRecordAt]);
 
-  const onTemplateChange = (key: keyof TemplateForm, value: string) => {
+  const onTemplateChange = (key: keyof TemplateForm, value: string | boolean) => {
     setTemplate((t) => ({ ...t, [key]: value }));
   };
 
@@ -774,6 +776,7 @@ function RouteComponent() {
       acceptanceStaff: record.acceptanceStaff || "",
       acceptanceDate: record.acceptanceDate || "",
       salePrice: record.salePrice != null ? String(record.salePrice) : "",
+      skipDegreeInfo: false, // 从记录复制时默认不跳过度数信息
     });
     setStatusText("已从记录填充到模板");
   }, []);
@@ -974,6 +977,21 @@ function RouteComponent() {
 
       <section className="space-y-3">
         <div className="text-lg font-semibold">模板输入（新店内码创建记录时将复制此处内容）</div>
+        
+        {/* 跳过度数信息选项 */}
+        <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
+          <input
+            type="checkbox"
+            id="skipDegreeInfo"
+            checked={template.skipDegreeInfo}
+            onChange={(e) => onTemplateChange("skipDegreeInfo", e.target.checked)}
+            className="w-4 h-4"
+          />
+          <label htmlFor="skipDegreeInfo" className="text-sm text-gray-700 cursor-pointer">
+            跳过度数信息获取（适用于没有度数信息的产品）
+          </label>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-sm text-gray-600">产品名称</label>
