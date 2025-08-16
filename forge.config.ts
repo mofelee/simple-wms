@@ -15,6 +15,7 @@ const config: ForgeConfig = {
     appBundleId: 'com.mofelee.simple-wms',
     appCopyright: '© 2025 Mofe Lee',
     executableName: 'simple-wms',
+    icon: 'images/logo',
     extraResource: [
       'src/app-update.yml'
     ],
